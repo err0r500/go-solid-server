@@ -100,7 +100,7 @@ func logIn(w http.ResponseWriter, req *httpRequest, s *Server) SystemReturn {
 		if len(redirTo) > 0 {
 			loginRedirect(w, req, s, values, redirTo)
 		}
-		return SystemReturn{Status: 200, Body: LogoutTemplate(req.User)}
+		return SystemReturn{Status: 200, Body: s.templater.LogoutTemplate(req.User)}
 	}
 
 	webid := req.FormValue("webid")
@@ -109,7 +109,7 @@ func logIn(w http.ResponseWriter, req *httpRequest, s *Server) SystemReturn {
 	if req.Method == "GET" {
 		// try to guess WebID from account
 		webid = req.getAccountWebID()
-		return SystemReturn{Status: 200, Body: LoginTemplate(redirTo, origin, webid)}
+		return SystemReturn{Status: 200, Body: s.templater.LoginTemplate(redirTo, origin, webid)}
 	}
 
 	if len(webid) == 0 && len(passF) == 0 {
@@ -200,8 +200,9 @@ func accountRecovery(w http.ResponseWriter, req *httpRequest, s *Server) SystemR
 		// validate or issue new password
 		return validateRecoveryToken(w, req, s)
 	}
+
 	// return default app with form
-	return SystemReturn{Status: 200, Body: Apps["accountRecovery"]}
+	return SystemReturn{Status: 200, Body: s.templater.AccountRecoveryPage()}
 }
 
 func sendRecoveryToken(w http.ResponseWriter, req *httpRequest, s *Server) SystemReturn {
@@ -251,9 +252,9 @@ func sendRecoveryToken(w http.ResponseWriter, req *httpRequest, s *Server) Syste
 	params["{{.To}}"] = email
 	params["{{.IP}}"] = IP
 	params["{{.Host}}"] = resource.Obj.Host
-	params["{{.From}}"] = s.Config.SMTPConfig.Addr
+	//params["{{.From}}"] = s.Config.SMTPConfig.Addr // fixme (should be property of the struct since it's not likely to change)
 	params["{{.Link}}"] = link
-	go s.sendRecoveryMail(params)
+	go s.mailer.SendRecoveryMail(params)
 	return SystemReturn{Status: 200, Body: "You should receive an email shortly with further instructions."}
 }
 
@@ -290,7 +291,7 @@ func validateRecoveryToken(w http.ResponseWriter, req *httpRequest, s *Server) S
 	if len(pass) > 0 && len(verif) > 0 {
 		if pass != verif {
 			// passwords don't match,
-			return SystemReturn{Status: 200, Body: NewPassTemplate(token, "Passwords do not match!")}
+			return SystemReturn{Status: 200, Body: s.templater.NewPassTemplate(token, "Passwords do not match!")}
 		}
 		// save new password
 		resource, _ := req.pathInfo(req.BaseURI())
@@ -331,7 +332,7 @@ func validateRecoveryToken(w http.ResponseWriter, req *httpRequest, s *Server) S
 		}
 	}
 
-	return SystemReturn{Status: 200, Body: NewPassTemplate(token, "")}
+	return SystemReturn{Status: 200, Body: s.templater.NewPassTemplate(token, "")}
 }
 
 func newAccount(w http.ResponseWriter, req *httpRequest, s *Server) SystemReturn {
@@ -506,12 +507,12 @@ func newAccount(w http.ResponseWriter, req *httpRequest, s *Server) SystemReturn
 		// Setup message
 		params := make(map[string]string)
 		params["{{.To}}"] = req.FormValue("email")
-		params["{{.From}}"] = s.Config.SMTPConfig.Addr
+		//params["{{.From}}"] = s.Config.SMTPConfig.Addr //  fixme
 		params["{{.Name}}"] = account.Name
 		params["{{.Host}}"] = resource.Obj.Host
 		params["{{.Account}}"] = account.BaseURI
 		params["{{.WebID}}"] = account.WebID
-		go s.sendWelcomeMail(params)
+		go s.mailer.SendWelcomeMail(params)
 	}
 
 	// Generate cert
@@ -609,7 +610,7 @@ func newCert(w http.ResponseWriter, req *httpRequest, s *Server) SystemReturn {
 
 		return SystemReturn{Status: 200, Body: body}
 	} else if strings.Contains(req.Header.Get("Accept"), "text/html") {
-		return SystemReturn{Status: 200, Body: Apps["newCert"]}
+		return SystemReturn{Status: 200, Body: s.templater.NewCert()}
 	}
 	return SystemReturn{Status: 500, Body: "Your request could not be processed. Either no WebID or no SPKAC value was provided."}
 }
@@ -694,7 +695,7 @@ func accountStatus(w http.ResponseWriter, req *httpRequest, s *Server) SystemRet
 
 func accountTokens(w http.ResponseWriter, req *httpRequest, s *Server) SystemReturn {
 	if len(req.User) == 0 {
-		return SystemReturn{Status: 401, Body: UnauthorizedTemplate(req.FormValue("redirect"), "")}
+		return SystemReturn{Status: 401, Body: s.templater.Unauthorized(req.FormValue("redirect"), "")}
 	}
 	if !req.IsOwner {
 		return SystemReturn{Status: 403, Body: "You are not allowed to view this page"}
@@ -728,7 +729,7 @@ func accountTokens(w http.ResponseWriter, req *httpRequest, s *Server) SystemRet
 
 	tokensHtml += "</div>"
 
-	return SystemReturn{Status: 200, Body: TokensTemplate(tokensHtml)}
+	return SystemReturn{Status: 200, Body: s.templater.TokensTemplate(tokensHtml)}
 }
 
 // DiskUsage returns the total size occupied by dir and contents

@@ -16,6 +16,8 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/err0r500/go-solid-server/uc"
+
 	"github.com/boltdb/bolt"
 	"github.com/gorilla/securecookie"
 	"golang.org/x/net/webdav"
@@ -72,6 +74,8 @@ type Server struct {
 	debug      *log.Logger
 	webdav     *webdav.Handler
 	BoltDB     *bolt.DB
+	templater  uc.Templater
+	mailer     uc.Mailer
 }
 
 type httpRequest struct {
@@ -142,14 +146,14 @@ func (req httpRequest) ifNoneMatch(etag string) bool {
 	return false
 }
 
-func handleStatusText(status int, err error) string {
+func (s Server) handleStatusText(status int, err error) string {
 	switch status {
 	case 200:
 		return "HTTP 200 - OK"
 	case 401:
-		return Apps["401"]
+		return s.templater.Unauthenticated()
 	case 403:
-		return Apps["403"]
+		return s.templater.Unauthorized()
 	case 404:
 		return "HTTP 404 - Not found\n\n" + err.Error()
 	case 500:
@@ -236,7 +240,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 func TwinqlQuery(w http.ResponseWriter, req *httpRequest, s *Server) *response {
 	r := new(response)
 
-	err := ProxyReq(w, req, s, s.Config.QueryTemplate)
+	err := s.ProxyReq(w, req, s.Config.QueryTemplate)
 	if err != nil {
 		s.debug.Println("Query error:", err.Error())
 	}
@@ -244,7 +248,7 @@ func TwinqlQuery(w http.ResponseWriter, req *httpRequest, s *Server) *response {
 }
 
 // Proxy requests
-func ProxyReq(w http.ResponseWriter, req *httpRequest, s *Server, reqUrl string) error {
+func (s *Server) ProxyReq(w http.ResponseWriter, req *httpRequest, reqUrl string) error {
 	uri, err := url.Parse(reqUrl)
 	if err != nil {
 		return err
@@ -347,7 +351,7 @@ func (s *Server) handle(w http.ResponseWriter, req *httpRequest) (r *response) {
 
 	// Proxy requests
 	if ProxyPath != "" && strings.HasSuffix(req.URL.Path, ProxyPath) {
-		err = ProxyReq(w, req, s, s.Config.ProxyTemplate+req.FormValue("uri"))
+		err = s.ProxyReq(w, req, s.Config.ProxyTemplate+req.FormValue("uri"))
 		if err != nil {
 			s.debug.Println("Proxy error:", err.Error())
 		}
@@ -455,7 +459,7 @@ func (s *Server) handle(w http.ResponseWriter, req *httpRequest) (r *response) {
 		}
 
 		if !resource.Exists {
-			return r.respond(404, Apps["404"])
+			return r.respond(404, s.templater.NotFound())
 		}
 
 		// First redirect to path + trailing slash if it's missing
@@ -486,7 +490,7 @@ func (s *Server) handle(w http.ResponseWriter, req *httpRequest) (r *response) {
 		status := 501
 		aclStatus, err := acl.AllowRead(resource.URI)
 		if aclStatus > 200 || err != nil {
-			return r.respond(aclStatus, handleStatusText(aclStatus, err))
+			return r.respond(aclStatus, s.handleStatusText(aclStatus, err))
 		}
 
 		if req.Method == "HEAD" {
@@ -699,7 +703,7 @@ func (s *Server) handle(w http.ResponseWriter, req *httpRequest) (r *response) {
 				w.Header().Set("Link", brack(resource.MetaURI)+"; rel=\"meta\", "+brack(resource.AclURI)+"; rel=\"acl\"")
 				if maybeRDF {
 					w.Header().Set(HCType, contentType)
-					return r.respond(200, Apps[s.Config.DataApp])
+					return r.respond(200, s.templater.Login())
 				}
 				w.Header().Set(HCType, magicType)
 				w.WriteHeader(200)
@@ -797,7 +801,7 @@ func (s *Server) handle(w http.ResponseWriter, req *httpRequest) (r *response) {
 			// check if we can write then
 			aclWrite, err := acl.AllowWrite(resource.URI)
 			if aclWrite > 200 || err != nil {
-				return r.respond(aclWrite, handleStatusText(aclWrite, err))
+				return r.respond(aclWrite, s.handleStatusText(aclWrite, err))
 			}
 		}
 
@@ -878,7 +882,7 @@ func (s *Server) handle(w http.ResponseWriter, req *httpRequest) (r *response) {
 			// check if we can write then
 			aclWrite, err := acl.AllowWrite(resource.URI)
 			if aclWrite > 200 || err != nil {
-				return r.respond(aclWrite, handleStatusText(aclWrite, err))
+				return r.respond(aclWrite, s.handleStatusText(aclWrite, err))
 			}
 		}
 		err = nil
@@ -1101,7 +1105,7 @@ func (s *Server) handle(w http.ResponseWriter, req *httpRequest) (r *response) {
 			// check if we can write then
 			aclWrite, err := acl.AllowWrite(resource.URI)
 			if aclWrite > 200 || err != nil {
-				return r.respond(aclWrite, handleStatusText(aclWrite, err))
+				return r.respond(aclWrite, s.handleStatusText(aclWrite, err))
 			}
 		}
 
@@ -1177,7 +1181,7 @@ func (s *Server) handle(w http.ResponseWriter, req *httpRequest) (r *response) {
 
 		aclWrite, err := acl.AllowWrite(resource.URI)
 		if aclWrite > 200 || err != nil {
-			return r.respond(aclWrite, handleStatusText(aclWrite, err))
+			return r.respond(aclWrite, s.handleStatusText(aclWrite, err))
 		}
 
 		if len(resource.Path) == 0 {
@@ -1193,7 +1197,7 @@ func (s *Server) handle(w http.ResponseWriter, req *httpRequest) (r *response) {
 		err = os.Remove(resource.File)
 		if err != nil {
 			if os.IsNotExist(err) {
-				return r.respond(404, Apps["404"])
+				return r.respond(404, s.templater.NotFound())
 			}
 			return r.respond(500, err)
 		}
@@ -1211,7 +1215,7 @@ func (s *Server) handle(w http.ResponseWriter, req *httpRequest) (r *response) {
 
 		aclWrite, err := acl.AllowWrite(resource.URI)
 		if aclWrite > 200 || err != nil {
-			return r.respond(aclWrite, handleStatusText(aclWrite, err))
+			return r.respond(aclWrite, s.handleStatusText(aclWrite, err))
 		}
 
 		err = os.MkdirAll(resource.File, 0755)
@@ -1235,7 +1239,7 @@ func (s *Server) handle(w http.ResponseWriter, req *httpRequest) (r *response) {
 	case "COPY", "MOVE", "LOCK", "UNLOCK":
 		aclWrite, err := acl.AllowWrite(resource.URI)
 		if aclWrite > 200 || err != nil {
-			return r.respond(aclWrite, handleStatusText(aclWrite, err))
+			return r.respond(aclWrite, s.handleStatusText(aclWrite, err))
 		}
 		s.webdav.ServeHTTP(w, req.Request)
 

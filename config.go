@@ -90,7 +90,7 @@ type ServerConfig struct {
 	BoltPath string
 
 	// SMTPConfig holds the settings for the remote SMTP user/server
-	SMTPConfig EmailConfig
+	//SMTPConfig mail.EmailConfig
 }
 
 // NewServerConfig creates a new config object

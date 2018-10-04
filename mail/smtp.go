@@ -1,15 +1,26 @@
-package gold
+package mail
 
 import (
 	"crypto/tls"
 	"fmt"
+	"log"
 	"net/mail"
 	"net/smtp"
 	"strconv"
-	"strings"
+
+	"github.com/err0r500/go-solid-server/uc"
 )
 
-type EmailStruct struct {
+// fixme set config
+func New() uc.Mailer {
+	return smtpMailer{}
+}
+
+type smtpMailer struct {
+	config emailConfig
+}
+
+type emailStruct struct {
 	To       string
 	ToName   string
 	From     string
@@ -18,8 +29,8 @@ type EmailStruct struct {
 	Body     string
 }
 
-// EmailConfig holds configuration values for remote SMTP servers
-type EmailConfig struct {
+// emailConfig holds configuration values for remote SMTP servers
+type emailConfig struct {
 	// Name of the remote SMTP server account, i.e. Server admin
 	Name string
 	// Addr is the remote SMTP server email address, i.e. admin@server.org
@@ -38,45 +49,40 @@ type EmailConfig struct {
 	Insecure bool
 }
 
-func NewEmailStruct() *EmailStruct {
-	return &EmailStruct{}
+func NewEmailStruct() *emailStruct {
+	return &emailStruct{}
 }
 
-func (s *Server) sendWelcomeMail(params map[string]string) {
+func (s smtpMailer) SendWelcomeMail(params map[string]string) {
 	email := NewEmailStruct()
 	email.To = params["{{.To}}"]
 	email.ToName = params["{{.Name}}"]
 	email.From = params["{{.From}}"]
 	email.FromName = "Notifications Service"
 	email.Subject = "Welcome to " + params["{{.Host}}"] + "!"
-	email.Body = parseMailTemplate("welcomeMail", params)
+	email.Body = Welcome()
 
 	s.sendMail(email)
 }
 
-func (s *Server) sendRecoveryMail(params map[string]string) {
+func (s smtpMailer) SendRecoveryMail(params map[string]string) {
 	email := NewEmailStruct()
 	email.To = params["{{.To}}"]
 	email.ToName = params["{{.Name}}"]
 	email.From = params["{{.From}}"]
 	email.FromName = "Account Recovery"
 	email.Subject = "Recovery instructions for your account on " + params["{{.Host}}"]
-	email.Body = parseMailTemplate("accountRecovery", params)
+	email.Body = AccountRecovery()
 
 	s.sendMail(email)
 }
 
 // should be run in a go routine
-func (s *Server) sendMail(email *EmailStruct) {
-	if &s.Config.SMTPConfig == nil {
-		s.debug.Println("Missing smtp server configuration")
-	}
-	smtpCfg := &s.Config.SMTPConfig
-
+func (s smtpMailer) sendMail(email *emailStruct) {
 	auth := smtp.PlainAuth("",
-		smtpCfg.User,
-		smtpCfg.Pass,
-		smtpCfg.Host,
+		s.config.User,
+		s.config.Pass,
+		s.config.Host,
 	)
 
 	// Setup headers
@@ -95,34 +101,34 @@ func (s *Server) sendMail(email *EmailStruct) {
 	}
 	message += "\r\n" + email.Body
 
-	if len(smtpCfg.Host) > 0 && smtpCfg.Port > 0 && auth != nil {
-		smtpServer := smtpCfg.Host + ":" + strconv.Itoa(smtpCfg.Port)
+	if len(s.config.Host) > 0 && s.config.Port > 0 && auth != nil {
+		smtpServer := s.config.Host + ":" + strconv.Itoa(s.config.Port)
 		var err error
 		// force upgrade to full SSL/TLS connection
-		if smtpCfg.ForceSSL {
-			err = s.sendSecureMail(src, dst, []byte(message), smtpCfg)
+		if s.config.ForceSSL {
+			err = s.sendSecureMail(src, dst, []byte(message))
 		} else {
-			err = smtp.SendMail(smtpServer, auth, smtpCfg.Addr, []string{email.To}, []byte(message))
+			err = smtp.SendMail(smtpServer, auth, s.config.Addr, []string{email.To}, []byte(message))
 		}
 		if err != nil {
-			s.debug.Println("Error sending recovery email to " + email.To + ": " + err.Error())
+			log.Println("Error sending recovery email to " + email.To + ": " + err.Error())
 		} else {
-			s.debug.Println("Successfully sent recovery email to " + email.To)
+			log.Println("Successfully sent recovery email to " + email.To)
 		}
 	} else {
-		s.debug.Println("Missing smtp server and/or port")
+		log.Println("Missing smtp server and/or port")
 	}
 }
 
-func (s *Server) sendSecureMail(from mail.Address, to mail.Address, msg []byte, cfg *EmailConfig) (err error) {
+func (s smtpMailer) sendSecureMail(from mail.Address, to mail.Address, msg []byte) (err error) {
 	// Connect to the SMTP Server
-	serverName := cfg.Host + ":" + strconv.Itoa(cfg.Port)
-	auth := smtp.PlainAuth("", cfg.User, cfg.Pass, cfg.Host)
+	serverName := s.config.Host + ":" + strconv.Itoa(s.config.Port)
+	auth := smtp.PlainAuth("", s.config.User, s.config.Pass, s.config.Host)
 
 	// TLS config
 	tlsconfig := &tls.Config{
-		InsecureSkipVerify: s.Config.SMTPConfig.Insecure,
-		ServerName:         cfg.Host,
+		InsecureSkipVerify: s.config.Insecure,
+		ServerName:         s.config.Host,
 	}
 
 	// Here is the key, you need to call tls.Dial instead of smtp.Dial
@@ -130,50 +136,50 @@ func (s *Server) sendSecureMail(from mail.Address, to mail.Address, msg []byte, 
 	// from the very beginning (no starttls)
 	conn, err := tls.Dial("tcp", serverName, tlsconfig)
 	if err != nil {
-		s.debug.Println(err.Error())
+		log.Println(err.Error())
 		return
 	}
 	defer conn.Close()
 
-	c, err := smtp.NewClient(conn, cfg.Host)
+	c, err := smtp.NewClient(conn, s.config.Host)
 	if err != nil {
-		s.debug.Println(err.Error())
+		log.Println(err.Error())
 		return
 	}
 
 	// Auth
 	if err = c.Auth(auth); err != nil {
-		s.debug.Println(err.Error())
+		log.Println(err.Error())
 		return
 	}
 
 	// To && From
 	if err = c.Mail(from.Address); err != nil {
-		s.debug.Println(err.Error())
+		log.Println(err.Error())
 		return
 	}
 
 	if err = c.Rcpt(to.Address); err != nil {
-		s.debug.Println(err.Error())
+		log.Println(err.Error())
 		return
 	}
 
 	// Data
 	w, err := c.Data()
 	if err != nil {
-		s.debug.Println(err.Error())
+		log.Println(err.Error())
 		return
 	}
 
 	_, err = w.Write(msg)
 	if err != nil {
-		s.debug.Println(err.Error())
+		log.Println(err.Error())
 		return
 	}
 
 	err = w.Close()
 	if err != nil {
-		s.debug.Println(err.Error())
+		log.Println(err.Error())
 		return
 	}
 
@@ -181,15 +187,11 @@ func (s *Server) sendSecureMail(from mail.Address, to mail.Address, msg []byte, 
 	return nil
 }
 
-func sendWelcomeEmail() error {
-	return nil
-}
-
-func parseMailTemplate(tpl string, vals map[string]string) string {
-	body := SMTPTemplates[tpl]
-
-	for oVal, nVal := range vals {
-		body = strings.Replace(body, oVal, nVal, -1)
-	}
-	return body
-}
+//func parseMailTemplate(tpl string, vals map[string]string) string {
+//	body := SMTPTemplates[tpl]
+//
+//	for oVal, nVal := range vals {
+//		body = strings.Replace(body, oVal, nVal, -1)
+//	}
+//	return body
+//}

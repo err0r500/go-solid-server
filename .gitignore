@@ -2,3 +2,4 @@ _bench
 coverage.out
 gold.conf
 .idea/
+vendor/

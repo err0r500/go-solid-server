@@ -107,40 +107,17 @@ func jterm2term(term jsonld.Term) Term {
 	return nil
 }
 
+func isNilOrEquals(t1 Term, t2 Term) bool {
+	if t1 == nil {
+		return true
+	}
+	return t2.Equal(t1)
+}
+
 // One returns one triple based on a triple pattern of S, P, O objects
 func (g *Graph) One(s Term, p Term, o Term) *Triple {
 	for triple := range g.IterTriples() {
-		if s != nil {
-			if p != nil {
-				if o != nil {
-					if triple.Subject.Equal(s) && triple.Predicate.Equal(p) && triple.Object.Equal(o) {
-						return triple
-					}
-				} else {
-					if triple.Subject.Equal(s) && triple.Predicate.Equal(p) {
-						return triple
-					}
-				}
-			} else {
-				if triple.Subject.Equal(s) {
-					return triple
-				}
-			}
-		} else if p != nil {
-			if o != nil {
-				if triple.Predicate.Equal(p) && triple.Object.Equal(o) {
-					return triple
-				}
-			} else {
-				if triple.Predicate.Equal(p) {
-					return triple
-				}
-			}
-		} else if o != nil {
-			if triple.Object.Equal(o) {
-				return triple
-			}
-		} else {
+		if isNilOrEquals(s, triple.Subject) && isNilOrEquals(p, triple.Predicate) && isNilOrEquals(o, triple.Object) {
 			return triple
 		}
 	}
@@ -178,36 +155,11 @@ func (g *Graph) Remove(t *Triple) {
 func (g *Graph) All(s Term, p Term, o Term) []*Triple {
 	var triples []*Triple
 	for triple := range g.IterTriples() {
-		if s != nil {
-			if p != nil {
-				if o != nil {
-					if triple.Subject.Equal(s) && triple.Predicate.Equal(p) && triple.Object.Equal(o) {
-						triples = append(triples, triple)
-					}
-				} else {
-					if triple.Subject.Equal(s) && triple.Predicate.Equal(p) {
-						triples = append(triples, triple)
-					}
-				}
-			} else {
-				if triple.Subject.Equal(s) {
-					triples = append(triples, triple)
-				}
-			}
-		} else if p != nil {
-			if o != nil {
-				if triple.Predicate.Equal(p) && triple.Object.Equal(o) {
-					triples = append(triples, triple)
-				}
-			} else {
-				if triple.Predicate.Equal(p) {
-					triples = append(triples, triple)
-				}
-			}
-		} else if o != nil {
-			if triple.Object.Equal(o) {
-				triples = append(triples, triple)
-			}
+		if s == nil && p == nil && o == nil {
+			continue
+		}
+		if isNilOrEquals(s, triple.Subject) && isNilOrEquals(p, triple.Predicate) && isNilOrEquals(o, triple.Object) {
+			triples = append(triples, triple)
 		}
 	}
 	return triples
@@ -215,11 +167,7 @@ func (g *Graph) All(s Term, p Term, o Term) []*Triple {
 
 // AddStatement adds a Statement object
 func (g *Graph) AddStatement(st *crdf.Statement) {
-	s, p, o := term2term(st.Subject), term2term(st.Predicate), term2term(st.Object)
-	for range g.All(s, p, o) {
-		return
-	}
-	g.AddTriple(s, p, o)
+	g.AddTriple(term2term(st.Subject), term2term(st.Predicate), term2term(st.Object))
 }
 
 // Parse is used to parse RDF data from a reader, using the provided mime type

@@ -12,7 +12,7 @@
 Written in Go, based on
 [initial work done by William Waites](https://bitbucket.org/ww/gold).
 
-[![Build Status](https://travis-ci.org/linkeddata/gold.svg?branch=master)](https://travis-ci.org/linkeddata/gold)
+[![Build Status](https://travis-ci.org/err0r500/go-solid-server.svg?branch=master)](https://travis-ci.org/err0r500/go-solid-server)
 
 ## Installing
 

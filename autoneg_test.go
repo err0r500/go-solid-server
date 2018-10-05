@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"testing"
 
+	"github.com/err0r500/go-solid-server/domain"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -20,7 +21,7 @@ func mockAccept(accept string) (al AcceptList, err error) {
 	req := &http.Request{}
 	req.Header = make(http.Header)
 	req.Header["Accept"] = []string{accept}
-	myreq := &httpRequest{req, nil, "", "", "", false}
+	myreq := &httpRequest{req, nil, "", "", "", false, domain.URIHandler{}, WAC{}, OrigHttpCaller{}}
 	al, err = myreq.Accept()
 	return
 }

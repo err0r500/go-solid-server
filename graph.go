@@ -1,18 +1,12 @@
 package gold
 
 import (
-	"bytes"
 	"crypto/tls"
 	"encoding/json"
-	"fmt"
 	"io"
-	"io/ioutil"
-	"log"
 	"net/http"
-	"net/url"
-	"os"
 
-	jsonld "github.com/linkeddata/gojsonld"
+	"github.com/err0r500/go-solid-server/domain"
 	crdf "github.com/presbrey/goraptor"
 )
 
@@ -20,15 +14,15 @@ import (
 type AnyGraph interface {
 	Len() int
 	URI() string
-	Parse(io.Reader, string)
-	Serialize(string) (string, error)
+	//Parse(io.Reader, string)
+	//Serialize(string) (string, error)
 
-	JSONPatch(io.Reader) error
+	//JSONPatch(io.Reader) error
 	SPARQLUpdate(*SPARQLUpdate) (int, error)
-	IterTriples() chan *Triple
+	IterTriples() chan *domain.Triple
 
-	ReadFile(string)
-	WriteFile(*os.File, string) error
+	//ReadFile(string)
+	//WriteFile(*os.File, string) error
 }
 
 var (
@@ -43,10 +37,10 @@ var (
 
 // Graph structure
 type Graph struct {
-	triples map[*Triple]bool
+	triples map[*domain.Triple]bool
 
 	uri  string
-	term Term
+	term domain.Term
 }
 
 // NewGraph creates a Graph object
@@ -55,10 +49,10 @@ func NewGraph(uri string) *Graph {
 		panic(uri)
 	}
 	return &Graph{
-		triples: make(map[*Triple]bool),
+		triples: make(map[*domain.Triple]bool),
 
 		uri:  uri,
-		term: NewResource(uri),
+		term: domain.NewResource(uri),
 	}
 }
 
@@ -68,7 +62,7 @@ func (g *Graph) Len() int {
 }
 
 // Term returns a Graph Term object
-func (g *Graph) Term() Term {
+func (g *Graph) Term() domain.Term {
 	return g.term
 }
 
@@ -77,37 +71,22 @@ func (g *Graph) URI() string {
 	return g.uri
 }
 
-func term2term(term crdf.Term) Term {
+func term2term(term crdf.Term) domain.Term {
 	switch term := term.(type) {
 	case *crdf.Blank:
-		return NewBlankNode(term.String())
+		return domain.NewBlankNode(term.String())
 	case *crdf.Literal:
 		if len(term.Datatype) > 0 {
-			return NewLiteralWithLanguageAndDatatype(term.Value, term.Lang, NewResource(term.Datatype))
+			return domain.NewLiteralWithLanguageAndDatatype(term.Value, term.Lang, domain.NewResource(term.Datatype))
 		}
-		return NewLiteral(term.Value)
+		return domain.NewLiteral(term.Value)
 	case *crdf.Uri:
-		return NewResource(term.String())
+		return domain.NewResource(term.String())
 	}
 	return nil
 }
 
-func jterm2term(term jsonld.Term) Term {
-	switch term := term.(type) {
-	case *jsonld.BlankNode:
-		return NewBlankNode(term.RawValue())
-	case *jsonld.Literal:
-		if term.Datatype != nil && len(term.Datatype.String()) > 0 {
-			return NewLiteralWithLanguageAndDatatype(term.Value, term.Language, NewResource(term.Datatype.RawValue()))
-		}
-		return NewLiteral(term.Value)
-	case *jsonld.Resource:
-		return NewResource(term.RawValue())
-	}
-	return nil
-}
-
-func isNilOrEquals(t1 Term, t2 Term) bool {
+func isNilOrEquals(t1 domain.Term, t2 domain.Term) bool {
 	if t1 == nil {
 		return true
 	}
@@ -115,7 +94,7 @@ func isNilOrEquals(t1 Term, t2 Term) bool {
 }
 
 // One returns one triple based on a triple pattern of S, P, O objects
-func (g *Graph) One(s Term, p Term, o Term) *Triple {
+func (g *Graph) One(s domain.Term, p domain.Term, o domain.Term) *domain.Triple {
 	for triple := range g.IterTriples() {
 		if isNilOrEquals(s, triple.Subject) && isNilOrEquals(p, triple.Predicate) && isNilOrEquals(o, triple.Object) {
 			return triple
@@ -125,8 +104,8 @@ func (g *Graph) One(s Term, p Term, o Term) *Triple {
 }
 
 // IterTriples iterates through all the triples in a graph
-func (g *Graph) IterTriples() (ch chan *Triple) {
-	ch = make(chan *Triple)
+func (g *Graph) IterTriples() (ch chan *domain.Triple) {
+	ch = make(chan *domain.Triple)
 	go func() {
 		for triple := range g.triples {
 			ch <- triple
@@ -137,23 +116,23 @@ func (g *Graph) IterTriples() (ch chan *Triple) {
 }
 
 // Add is used to add a Triple object to the graph
-func (g *Graph) Add(t *Triple) {
+func (g *Graph) Add(t *domain.Triple) {
 	g.triples[t] = true
 }
 
 // AddTriple is used to add a triple made of individual S, P, O objects
-func (g *Graph) AddTriple(s Term, p Term, o Term) {
-	g.triples[NewTriple(s, p, o)] = true
+func (g *Graph) AddTriple(s domain.Term, p domain.Term, o domain.Term) {
+	g.triples[domain.NewTriple(s, p, o)] = true
 }
 
 // Remove is used to remove a Triple object
-func (g *Graph) Remove(t *Triple) {
+func (g *Graph) Remove(t *domain.Triple) {
 	delete(g.triples, t)
 }
 
 // All is used to return all triples that match a given pattern of S, P, O objects
-func (g *Graph) All(s Term, p Term, o Term) []*Triple {
-	var triples []*Triple
+func (g *Graph) All(s domain.Term, p domain.Term, o domain.Term) []*domain.Triple {
+	var triples []*domain.Triple
 	for triple := range g.IterTriples() {
 		if s == nil && p == nil && o == nil {
 			continue
@@ -168,41 +147,6 @@ func (g *Graph) All(s Term, p Term, o Term) []*Triple {
 // AddStatement adds a Statement object
 func (g *Graph) AddStatement(st *crdf.Statement) {
 	g.AddTriple(term2term(st.Subject), term2term(st.Predicate), term2term(st.Object))
-}
-
-// Parse is used to parse RDF data from a reader, using the provided mime type
-func (g *Graph) Parse(reader io.Reader, mime string) {
-	parserName := mimeParser[mime]
-	if len(parserName) == 0 {
-		parserName = "guess"
-	}
-	if parserName == "jsonld" {
-		buf := new(bytes.Buffer)
-		buf.ReadFrom(reader)
-		jsonData, err := jsonld.ReadJSON(buf.Bytes())
-		options := &jsonld.Options{}
-		options.Base = ""
-		options.ProduceGeneralizedRdf = false
-		dataSet, err := jsonld.ToRDF(jsonData, options)
-		if err != nil {
-			log.Println(err)
-			return
-		}
-		for t := range dataSet.IterTriples() {
-			g.AddTriple(jterm2term(t.Subject), jterm2term(t.Predicate), jterm2term(t.Object))
-		}
-
-	} else {
-		parser := crdf.NewParser(parserName)
-		parser.SetLogHandler(func(level int, message string) {
-			log.Println(message)
-		})
-		defer parser.Free()
-		out := parser.Parse(reader, g.uri)
-		for s := range out {
-			g.AddStatement(s)
-		}
-	}
 }
 
 // ParseBase is used to parse RDF data from a reader, using the provided mime type and a base URI
@@ -222,105 +166,23 @@ func (g *Graph) ParseBase(reader io.Reader, mime string, baseURI string) {
 	}
 }
 
-// ReadFile is used to read RDF data from a file into the graph
-func (g *Graph) ReadFile(filename string) {
-	stat, err := os.Stat(filename)
-	if os.IsNotExist(err) {
-		return
-	} else if stat.IsDir() {
-		return
-	} else if !stat.IsDir() && err != nil {
-		log.Println(err)
-		return
-	}
-	f, err := os.OpenFile(filename, os.O_RDONLY, 0)
-	defer f.Close()
-	if err != nil {
-		log.Println(err)
-		return
-	}
-	g.Parse(f, "text/turtle")
-}
+type JSONLDHandler struct{}
 
-// AppendFile is used to append RDF from a file, using a base URI
-func (g *Graph) AppendFile(filename string, baseURI string) {
-	_, err := os.Stat(filename)
-	if os.IsNotExist(err) {
-		return
-	} else if err != nil {
-		log.Println(err)
-		return
-	}
-	f, err := os.OpenFile(filename, os.O_RDONLY, 0)
-	defer f.Close()
-	if err != nil {
-		log.Println(err)
-		return
-	}
-	g.ParseBase(f, "text/turtle", baseURI)
-}
-
-// LoadURI is used to load RDF data from a specific URI
-func (g *Graph) LoadURI(uri string) (err error) {
-	doc := defrag(uri)
-	q, err := http.NewRequest("GET", doc, nil)
-	if err != nil {
-		return
-	}
-	q.Header.Set("Accept", "text/turtle,text/n3,application/rdf+xml")
-	r, err := httpClient.Do(q)
-	if err != nil {
-		return
-	}
-	if r != nil {
-		defer r.Body.Close()
-		if r.StatusCode == 200 {
-			g.ParseBase(r.Body, r.Header.Get("Content-Type"), doc)
-		} else {
-			err = fmt.Errorf("Could not fetch graph from %s - HTTP %d", uri, r.StatusCode)
-		}
-	}
-	return
-}
-
-func term2C(t Term) crdf.Term {
-	switch t := t.(type) {
-	case *BlankNode:
-		node := crdf.Blank(t.ID)
-		return &node
-	case *Resource:
-		node := crdf.Uri(t.URI)
-		return &node
-	case *Literal:
-		dt := ""
-		if t.Datatype != nil {
-			dt = t.Datatype.(*Resource).URI
-		}
-		node := crdf.Literal{
-			Value:    t.Value,
-			Datatype: dt,
-			Lang:     t.Language,
-		}
-		return &node
-	}
-	return nil
-}
-
-func (g *Graph) serializeJSONLd() ([]byte, error) {
+func (JSONLDHandler) Serialize(g *Graph, mime string) (string, error) { // fixme : mime is not used, just to implement the Serializer interface, check if rdf really needs it
 	r := []map[string]interface{}{}
 	for elt := range g.IterTriples() {
 		one := map[string]interface{}{
-			"@id": elt.Subject.(*Resource).URI,
+			"@id": elt.Subject.(*domain.Resource).URI,
 		}
 		switch t := elt.Object.(type) {
-		case *Resource:
-			one[elt.Predicate.(*Resource).URI] = []map[string]string{
+		case *domain.Resource:
+			one[elt.Predicate.(*domain.Resource).URI] = []map[string]string{
 				{
 					"@id": t.URI,
 				},
 			}
 			break
-		case *Literal:
+		case *domain.Literal:
 			v := map[string]string{
 				"@value": t.Value,
 			}
@@ -330,103 +192,13 @@ func (g *Graph) serializeJSONLd() ([]byte, error) {
 			if len(t.Language) > 0 {
 				v["@language"] = t.Language
 			}
-			one[elt.Predicate.(*Resource).URI] = []map[string]string{v}
+			one[elt.Predicate.(*domain.Resource).URI] = []map[string]string{v}
 		}
 		r = append(r, one)
 	}
-	return json.Marshal(r)
-}
-
-// Serialize is used to serialize a graph based on a given mime type
-func (g *Graph) Serialize(mime string) (string, error) {
-	if mime == "application/ld+json" {
-		b, err := g.serializeJSONLd()
-		return string(b), err
-	}
-
-	serializerName := mimeSerializer[mime]
-	if len(serializerName) == 0 {
-		serializerName = "turtle"
-	}
-	serializer := crdf.NewSerializer(serializerName)
-	defer serializer.Free()
-
-	ch := make(chan *crdf.Statement, 1024)
-	go func() {
-		for triple := range g.IterTriples() {
-			ch <- &crdf.Statement{
-				Subject:   term2C(triple.Subject),
-				Predicate: term2C(triple.Predicate),
-				Object:    term2C(triple.Object),
-			}
-		}
-		close(ch)
-	}()
-	return serializer.Serialize(ch, g.uri)
-}
-
-// WriteFile is used to dump RDF from a Graph into a file
-func (g *Graph) WriteFile(file *os.File, mime string) error {
-	serializerName := mimeSerializer[mime]
-	if len(serializerName) == 0 {
-		serializerName = "turtle"
-	}
-	serializer := crdf.NewSerializer(serializerName)
-	defer serializer.Free()
-	err := serializer.SetFile(file, g.uri)
+	bytes, err := json.Marshal(r)
 	if err != nil {
-		return err
+		return "", err
 	}
-	ch := make(chan *crdf.Statement, 1024)
-	go func() {
-		for triple := range g.IterTriples() {
-			ch <- &crdf.Statement{
-				Subject:   term2C(triple.Subject),
-				Predicate: term2C(triple.Predicate),
-				Object:    term2C(triple.Object),
-			}
-		}
-		close(ch)
-	}()
-	serializer.AddN(ch)
-	return nil
-}
-
-type jsonPatch map[string]map[string][]struct {
-	Value string `json:"value"`
-	Type  string `json:"type"`
-}
-
-// JSONPatch is used to perform a PATCH operation on a Graph using data from the reader
-func (g *Graph) JSONPatch(r io.Reader) error {
-	v := make(jsonPatch)
-	data, err := ioutil.ReadAll(r)
-	if err != nil {
-		return err
-	}
-	err = json.Unmarshal(data, &v)
-	if err != nil {
-		return err
-	}
-	base, _ := url.Parse(g.uri)
-	for s, sv := range v {
-		su, _ := base.Parse(s)
-		for p, pv := range sv {
-			pu, _ := base.Parse(p)
-			subject := NewResource(su.String())
-			predicate := NewResource(pu.String())
-			for _, triple := range g.All(subject, predicate, nil) {
-				g.Remove(triple)
-			}
-			for _, o := range pv {
-				switch o.Type {
-				case "uri":
-					g.AddTriple(subject, predicate, NewResource(o.Value))
-				case "literal":
-					g.AddTriple(subject, predicate, NewLiteral(o.Value))
-				}
-			}
-		}
-	}
-	return nil
+	return string(bytes), nil
 }

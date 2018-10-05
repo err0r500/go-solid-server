@@ -6,15 +6,21 @@ import (
 	"net/http"
 	"strings"
 	"time"
+
+	"github.com/err0r500/go-solid-server/domain"
 )
 
 // WAC WebAccessControl object
 type WAC struct {
-	req  *httpRequest
-	srv  *Server
-	w    http.ResponseWriter
-	user string
-	key  string
+	req            *httpRequest
+	srv            *Server
+	w              http.ResponseWriter
+	user           string
+	key            string
+	fileHandler    FilesHandler
+	parser         Parser
+	uriManipulator domain.URIManipulator
+	httpCaller     HttpCaller
 }
 
 // NewWAC creates a new WAC object
@@ -42,44 +48,44 @@ func (acl *WAC) allow(mode string, path string) (int, error) {
 		acl.srv.debug.Println("Looking for policies in " + p.AclFile)
 
 		aclGraph := NewGraph(p.AclURI)
-		aclGraph.ReadFile(p.AclFile)
+		acl.fileHandler.ReadFile(aclGraph, acl.parser, p.AclFile)
 		if aclGraph.Len() > 0 {
 			acl.srv.debug.Println("Found policies in " + p.AclFile)
 			// TODO make it more elegant instead of duplicating code
-			for _, i := range aclGraph.All(nil, ns.acl.Get("mode"), ns.acl.Get("Control")) {
-				for range aclGraph.All(i.Subject, ns.acl.Get(accessType), NewResource(p.URI)) {
+			for _, i := range aclGraph.All(nil, domain.NewNS("acl").Get("mode"), domain.NewNS("acl").Get("Control")) {
+				for range aclGraph.All(i.Subject, domain.NewNS("acl").Get(accessType), domain.NewResource(p.URI)) {
 					//@@TODO add resourceKey to ACL vocab
 					if len(acl.user) > 0 {
 						acl.srv.debug.Println("Looking for policy matching user:", acl.user)
-						for range aclGraph.All(i.Subject, ns.acl.Get("owner"), NewResource(acl.user)) {
+						for range aclGraph.All(i.Subject, domain.NewNS("acl").Get("owner"), domain.NewResource(acl.user)) {
 							acl.srv.debug.Println(mode + " access allowed (as owner) for: " + acl.user)
 							return 200, nil
 						}
-						for range aclGraph.All(i.Subject, ns.acl.Get("agent"), NewResource(acl.user)) {
+						for range aclGraph.All(i.Subject, domain.NewNS("acl").Get("agent"), domain.NewResource(acl.user)) {
 							acl.srv.debug.Println(mode + " access allowed (as agent) for: " + acl.user)
 							return 200, nil
 						}
 					}
 					if len(acl.key) > 0 {
 						acl.srv.debug.Println("Looking for policy matching key:", acl.key)
-						for range aclGraph.All(i.Subject, ns.acl.Get("resourceKey"), NewLiteral(acl.key)) {
+						for range aclGraph.All(i.Subject, domain.NewNS("acl").Get("resourceKey"), domain.NewLiteral(acl.key)) {
 							acl.srv.debug.Println(mode + " access allowed based on matching resource key")
 							return 200, nil
 						}
 					}
-					for _, t := range aclGraph.All(i.Subject, ns.acl.Get("agentClass"), nil) {
+					for _, t := range aclGraph.All(i.Subject, domain.NewNS("acl").Get("agentClass"), nil) {
 						// check for foaf groups
 						acl.srv.debug.Println("Found agentClass policy")
-						if t.Object.Equal(ns.foaf.Get("Agent")) {
+						if t.Object.Equal(domain.NewNS("foaf").Get("Agent")) {
 							acl.srv.debug.Println(mode + " access allowed as FOAF Agent")
 							return 200, nil
 						}
 
-						groupURI := debrack(t.Object.String())
+						groupURI := acl.uriManipulator.Debrack(t.Object.String())
 						groupGraph := NewGraph(groupURI)
-						groupGraph.LoadURI(groupURI)
-						if groupGraph.Len() > 0 && groupGraph.One(t.Object, ns.rdf.Get("type"), ns.foaf.Get("Group")) != nil {
-							for range groupGraph.All(t.Object, ns.foaf.Get("member"), NewResource(acl.user)) {
+						acl.httpCaller.LoadURI(groupGraph, groupURI)
+						if groupGraph.Len() > 0 && groupGraph.One(t.Object, domain.NewNS("rdf").Get("type"), domain.NewNS("foaf").Get("Group")) != nil {
+							for range groupGraph.All(t.Object, domain.NewNS("foaf").Get("member"), domain.NewResource(acl.user)) {
 								acl.srv.debug.Println(acl.user + " listed as a member of the group " + groupURI)
 								return 200, nil
 							}
@@ -87,15 +93,15 @@ func (acl *WAC) allow(mode string, path string) (int, error) {
 					}
 				}
 			}
-			for _, i := range aclGraph.All(nil, ns.acl.Get("mode"), ns.acl.Get(mode)) {
+			for _, i := range aclGraph.All(nil, domain.NewNS("acl").Get("mode"), domain.NewNS("acl").Get(mode)) {
 				acl.srv.debug.Println("Found " + accessType + " policy for <" + mode + ">")
 
-				for range aclGraph.All(i.Subject, ns.acl.Get(accessType), NewResource(p.URI)) {
-					origins := aclGraph.All(i.Subject, ns.acl.Get("origin"), nil)
+				for range aclGraph.All(i.Subject, domain.NewNS("acl").Get(accessType), domain.NewResource(p.URI)) {
+					origins := aclGraph.All(i.Subject, domain.NewNS("acl").Get("origin"), nil)
 					if len(origin) > 0 && len(origins) > 0 {
-						acl.srv.debug.Println("Origin set to: " + brack(origin))
+						acl.srv.debug.Println("Origin set to: " + acl.uriManipulator.Brack(origin))
 						for _, o := range origins {
-							if brack(origin) == o.Object.String() {
+							if acl.uriManipulator.Brack(origin) == o.Object.String() {
 								acl.srv.debug.Println("Found policy for origin: " + o.Object.String())
 								goto allowOrigin
 							}
@@ -107,34 +113,34 @@ func (acl *WAC) allow(mode string, path string) (int, error) {
 				allowOrigin:
 					if len(acl.user) > 0 {
 						acl.srv.debug.Println("Looking for policy matching user:", acl.user)
-						for range aclGraph.All(i.Subject, ns.acl.Get("owner"), NewResource(acl.user)) {
+						for range aclGraph.All(i.Subject, domain.NewNS("acl").Get("owner"), domain.NewResource(acl.user)) {
 							acl.srv.debug.Println(mode + " access allowed (as owner) for: " + acl.user)
 							return 200, nil
 						}
-						for range aclGraph.All(i.Subject, ns.acl.Get("agent"), NewResource(acl.user)) {
+						for range aclGraph.All(i.Subject, domain.NewNS("acl").Get("agent"), domain.NewResource(acl.user)) {
 							acl.srv.debug.Println(mode + " access allowed (as agent) for: " + acl.user)
 							return 200, nil
 						}
 					}
 					if len(acl.key) > 0 {
 						acl.srv.debug.Println("Looking for policy matching key:", acl.key)
-						for range aclGraph.All(i.Subject, ns.acl.Get("resourceKey"), NewLiteral(acl.key)) {
+						for range aclGraph.All(i.Subject, domain.NewNS("acl").Get("resourceKey"), domain.NewLiteral(acl.key)) {
 							acl.srv.debug.Println(mode + " access allowed based on matching resource key")
 							return 200, nil
 						}
 					}
-					for _, t := range aclGraph.All(i.Subject, ns.acl.Get("agentClass"), nil) {
+					for _, t := range aclGraph.All(i.Subject, domain.NewNS("acl").Get("agentClass"), nil) {
 						// check for foaf groups
 						acl.srv.debug.Println("Found agentClass policy")
-						if t.Object.Equal(ns.foaf.Get("Agent")) {
+						if t.Object.Equal(domain.NewNS("foaf").Get("Agent")) {
 							acl.srv.debug.Println(mode + " access allowed as FOAF Agent")
 							return 200, nil
 						}
-						groupURI := debrack(t.Object.String())
+						groupURI := acl.uriManipulator.Debrack(t.Object.String())
 						groupGraph := NewGraph(groupURI)
-						groupGraph.LoadURI(groupURI)
-						if groupGraph.Len() > 0 && groupGraph.One(t.Object, ns.rdf.Get("type"), ns.foaf.Get("Group")) != nil {
-							for range groupGraph.All(t.Object, ns.foaf.Get("member"), NewResource(acl.user)) {
+						acl.httpCaller.LoadURI(groupGraph, groupURI)
+						if groupGraph.Len() > 0 && groupGraph.One(t.Object, domain.NewNS("rdf").Get("type"), domain.NewNS("foaf").Get("Group")) != nil {
+							for range groupGraph.All(t.Object, domain.NewNS("foaf").Get("member"), domain.NewResource(acl.user)) {
 								acl.srv.debug.Println(acl.user + " listed as a member of the group " + groupURI)
 								return 200, nil
 							}
@@ -205,15 +211,15 @@ func (acl *WAC) AllowControl(path string) (int, error) {
 	return acl.allow("Control", path)
 }
 
-func verifyDelegator(delegator string, delegatee string) bool {
+func (acl *WAC) VerifyDelegator(delegator string, delegatee string) bool {
 	g := NewGraph(delegator)
-	err := g.LoadURI(delegator)
+	err := acl.httpCaller.LoadURI(g, delegator)
 	if err != nil {
 		log.Println("Error loading graph for " + delegator)
 	}
 
-	for _, val := range g.All(NewResource(delegator), NewResource("http://www.w3.org/ns/auth/acl#delegates"), nil) {
-		if debrack(val.Object.String()) == delegatee {
+	for _, val := range g.All(domain.NewResource(delegator), domain.NewResource("http://www.w3.org/ns/auth/acl#delegates"), nil) {
+		if acl.uriManipulator.Debrack(val.Object.String()) == delegatee {
 			return true
 		}
 	}

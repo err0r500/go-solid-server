@@ -3,6 +3,7 @@ package gold
 import (
 	"bufio"
 	"bytes"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -16,6 +17,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/err0r500/go-solid-server/domain"
 	"github.com/err0r500/go-solid-server/uc"
 
 	"github.com/boltdb/bolt"
@@ -74,17 +76,25 @@ type Server struct {
 	debug      *log.Logger
 	webdav     *webdav.Handler
 	BoltDB     *bolt.DB
-	templater  uc.Templater
-	mailer     uc.Mailer
+
+	templater      uc.Templater
+	mailer         uc.Mailer
+	uriManipulator domain.URIManipulator
+	fileHandler    FilesHandler
+	parser         Parser
+	rdfHandler     RdfHandler
 }
 
 type httpRequest struct {
 	*http.Request
 	*Server
-	AcceptType  string
-	ContentType string
-	User        string
-	IsOwner     bool
+	AcceptType     string
+	ContentType    string
+	User           string
+	IsOwner        bool
+	uriManipulator domain.URIManipulator
+	wac            WAC
+	httpCaller     HttpCaller
 }
 
 func (req httpRequest) BaseURI() string {
@@ -224,7 +234,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	defer func() {
 		req.Body.Close()
 	}()
-	r := s.handle(w, &httpRequest{req, s, "", "", "", false})
+	r := s.handle(w, &httpRequest{req, s, "", "", "", false, s.uriManipulator, WAC{}, OrigHttpCaller{}}) // fixme : maybe not a good idea to build a new struct on each
 	for key := range r.headers {
 		w.Header().Set(key, r.headers.Get(key))
 	}
@@ -393,7 +403,7 @@ func (s *Server) handle(w http.ResponseWriter, req *httpRequest) (r *response) {
 	}
 
 	// set ACL Link header
-	w.Header().Set("Link", brack(resource.AclURI)+"; rel=\"acl\", "+brack(resource.MetaURI)+"; rel=\"meta\"")
+	w.Header().Set("Link", s.uriManipulator.Brack(resource.AclURI)+"; rel=\"acl\", "+s.uriManipulator.Brack(resource.MetaURI)+"; rel=\"meta\"")
 
 	// generic headers
 	w.Header().Set("Accept-Patch", "application/json, application/sparql-update")
@@ -417,15 +427,15 @@ func (s *Server) handle(w http.ResponseWriter, req *httpRequest) (r *response) {
 
 		// set LDP Link headers
 		if resource.IsDir {
-			w.Header().Add("Link", brack("http://www.w3.org/ns/ldp#BasicContainer")+"; rel=\"type\"")
+			w.Header().Add("Link", s.uriManipulator.Brack("http://www.w3.org/ns/ldp#BasicContainer")+"; rel=\"type\"")
 		}
-		w.Header().Add("Link", brack("http://www.w3.org/ns/ldp#Resource")+"; rel=\"type\"")
+		w.Header().Add("Link", s.uriManipulator.Brack("http://www.w3.org/ns/ldp#Resource")+"; rel=\"type\"")
 
 		// set API Link headers
-		w.Header().Add("Link", brack(resource.Base+"/"+SystemPrefix+"/login")+"; rel=\"http://www.w3.org/ns/solid/terms#loginEndpoint\"")
-		w.Header().Add("Link", brack(resource.Base+"/"+SystemPrefix+"/logout")+"; rel=\"http://www.w3.org/ns/solid/terms#logoutEndpoint\"")
-		w.Header().Add("Link", brack(resource.Base+"/,query")+"; rel=\"http://www.w3.org/ns/solid/terms#twinqlEndpoint\"")
-		w.Header().Add("Link", brack(resource.Base+"/,proxy?uri=")+"; rel=\"http://www.w3.org/ns/solid/terms#proxyEndpoint\"")
+		w.Header().Add("Link", s.uriManipulator.Brack(resource.Base+"/"+SystemPrefix+"/login")+"; rel=\"http://www.w3.org/ns/solid/terms#loginEndpoint\"")
+		w.Header().Add("Link", s.uriManipulator.Brack(resource.Base+"/"+SystemPrefix+"/logout")+"; rel=\"http://www.w3.org/ns/solid/terms#logoutEndpoint\"")
+		w.Header().Add("Link", s.uriManipulator.Brack(resource.Base+"/,query")+"; rel=\"http://www.w3.org/ns/solid/terms#twinqlEndpoint\"")
+		w.Header().Add("Link", s.uriManipulator.Brack(resource.Base+"/,proxy?uri=")+"; rel=\"http://www.w3.org/ns/solid/terms#proxyEndpoint\"")
 
 		return r.respond(200)
 
@@ -472,7 +482,7 @@ func (s *Server) handle(w http.ResponseWriter, req *httpRequest) (r *response) {
 		}
 
 		// overwrite ACL Link header
-		w.Header().Set("Link", brack(resource.AclURI)+"; rel=\"acl\", "+brack(resource.MetaURI)+"; rel=\"meta\"")
+		w.Header().Set("Link", s.uriManipulator.Brack(resource.AclURI)+"; rel=\"acl\", "+s.uriManipulator.Brack(resource.MetaURI)+"; rel=\"meta\"")
 
 		// redirect to app
 		if s.Config.Vhosts && !resource.Exists && resource.Base == strings.TrimRight(req.BaseURI(), "/") && contentType == "text/html" && req.Method != "HEAD" {
@@ -483,9 +493,9 @@ func (s *Server) handle(w http.ResponseWriter, req *httpRequest) (r *response) {
 		}
 
 		if resource.IsDir {
-			w.Header().Add("Link", brack("http://www.w3.org/ns/ldp#BasicContainer")+"; rel=\"type\"")
+			w.Header().Add("Link", s.uriManipulator.Brack("http://www.w3.org/ns/ldp#BasicContainer")+"; rel=\"type\"")
 		}
-		w.Header().Add("Link", brack("http://www.w3.org/ns/ldp#Resource")+"; rel=\"type\"")
+		w.Header().Add("Link", s.uriManipulator.Brack("http://www.w3.org/ns/ldp#Resource")+"; rel=\"type\"")
 
 		status := 501
 		aclStatus, err := acl.AllowRead(resource.URI)
@@ -525,7 +535,7 @@ func (s *Server) handle(w http.ResponseWriter, req *httpRequest) (r *response) {
 						if err != nil {
 							return r.respond(500, err)
 						}
-						w.Header().Set("Link", brack(resource.MetaURI)+"; rel=\"meta\", "+brack(resource.AclURI)+"; rel=\"acl\"")
+						w.Header().Set("Link", s.uriManipulator.Brack(resource.MetaURI)+"; rel=\"meta\", "+s.uriManipulator.Brack(resource.AclURI)+"; rel=\"acl\"")
 						break
 					} else if req.Method != "HEAD" {
 						//TODO load file manager app from local preference file
@@ -537,23 +547,23 @@ func (s *Server) handle(w http.ResponseWriter, req *httpRequest) (r *response) {
 					}
 				}
 			} else {
-				w.Header().Add("Link", brack(resource.MetaURI)+"; rel=\"meta\"")
+				w.Header().Add("Link", s.uriManipulator.Brack(resource.MetaURI)+"; rel=\"meta\"")
 
-				root := NewResource(resource.URI)
-				g.AddTriple(root, NewResource("http://www.w3.org/1999/02/22-rdf-syntax-ns#type"), NewResource("http://www.w3.org/ns/posix/stat#Directory"))
-				g.AddTriple(root, NewResource("http://www.w3.org/1999/02/22-rdf-syntax-ns#type"), NewResource("http://www.w3.org/ns/ldp#Container"))
-				g.AddTriple(root, NewResource("http://www.w3.org/1999/02/22-rdf-syntax-ns#type"), NewResource("http://www.w3.org/ns/ldp#BasicContainer"))
+				root := domain.NewResource(resource.URI)
+				g.AddTriple(root, domain.NewResource("http://www.w3.org/1999/02/22-rdf-syntax-ns#type"), domain.NewResource("http://www.w3.org/ns/posix/stat#Directory"))
+				g.AddTriple(root, domain.NewResource("http://www.w3.org/1999/02/22-rdf-syntax-ns#type"), domain.NewResource("http://www.w3.org/ns/ldp#Container"))
+				g.AddTriple(root, domain.NewResource("http://www.w3.org/1999/02/22-rdf-syntax-ns#type"), domain.NewResource("http://www.w3.org/ns/ldp#BasicContainer"))
 
-				g.AddTriple(root, NewResource("http://www.w3.org/ns/posix/stat#mtime"), NewLiteral(fmt.Sprintf("%d", resource.ModTime.Unix())))
-				g.AddTriple(root, NewResource("http://www.w3.org/ns/posix/stat#size"), NewLiteral(fmt.Sprintf("%d", resource.Size)))
+				g.AddTriple(root, domain.NewResource("http://www.w3.org/ns/posix/stat#mtime"), domain.NewLiteral(fmt.Sprintf("%d", resource.ModTime.Unix())))
+				g.AddTriple(root, domain.NewResource("http://www.w3.org/ns/posix/stat#size"), domain.NewLiteral(fmt.Sprintf("%d", resource.Size)))
 
 				kb := NewGraph(resource.MetaURI)
-				kb.ReadFile(resource.MetaFile)
+				s.fileHandler.ReadFile(kb, s.parser, resource.MetaFile)
 				if kb.Len() > 0 {
 					for triple := range kb.IterTriples() {
-						var subject Term
-						if kb.One(NewResource(resource.MetaURI), nil, nil) != nil {
-							subject = NewResource(resource.URI)
+						var subject domain.Term
+						if kb.One(domain.NewResource(resource.MetaURI), nil, nil) != nil {
+							subject = domain.NewResource(resource.URI)
 						} else {
 							subject = triple.Subject
 						}
@@ -569,8 +579,8 @@ func (s *Server) handle(w http.ResponseWriter, req *httpRequest) (r *response) {
 							if !res.IsDir && res.Exists && err == nil {
 								aclStatus, err = acl.AllowRead(res.URI)
 								if aclStatus == 200 && err == nil {
-									g.AppendFile(res.File, res.URI)
-									g.AddTriple(root, NewResource("http://www.w3.org/ns/ldp#contains"), NewResource(res.URI))
+									s.fileHandler.AppendFile(g, res.File, res.URI)
+									g.AddTriple(root, domain.NewResource("http://www.w3.org/ns/ldp#contains"), domain.NewResource(res.URI))
 								}
 							}
 						}
@@ -600,7 +610,7 @@ func (s *Server) handle(w http.ResponseWriter, req *httpRequest) (r *response) {
 					}
 
 					if infos, err := ioutil.ReadDir(resource.File); err == nil {
-						var _s Term
+						var _s domain.Term
 						for _, info := range infos {
 							if info != nil {
 								// do not list ACLs and Meta files
@@ -616,24 +626,24 @@ func (s *Server) handle(w http.ResponseWriter, req *httpRequest) (r *response) {
 									r.respond(500, err)
 								}
 								if info.IsDir() {
-									_s = NewResource(f.URI)
+									_s = domain.NewResource(f.URI)
 									if !showEmpty {
-										g.AddTriple(_s, NewResource("http://www.w3.org/1999/02/22-rdf-syntax-ns#type"), NewResource("http://www.w3.org/ns/ldp#BasicContainer"))
-										g.AddTriple(_s, NewResource("http://www.w3.org/1999/02/22-rdf-syntax-ns#type"), NewResource("http://www.w3.org/ns/ldp#Container"))
+										g.AddTriple(_s, domain.NewResource("http://www.w3.org/1999/02/22-rdf-syntax-ns#type"), domain.NewResource("http://www.w3.org/ns/ldp#BasicContainer"))
+										g.AddTriple(_s, domain.NewResource("http://www.w3.org/1999/02/22-rdf-syntax-ns#type"), domain.NewResource("http://www.w3.org/ns/ldp#Container"))
 									}
 									kb := NewGraph(f.URI)
-									kb.ReadFile(f.MetaFile)
+									s.fileHandler.ReadFile(kb, s.parser, f.MetaFile)
 									if kb.Len() > 0 {
-										for _, st := range kb.All(_s, NewResource("http://www.w3.org/1999/02/22-rdf-syntax-ns#type"), nil) {
+										for _, st := range kb.All(_s, domain.NewResource("http://www.w3.org/1999/02/22-rdf-syntax-ns#type"), nil) {
 											if st != nil && st.Object != nil {
-												g.AddTriple(_s, NewResource("http://www.w3.org/1999/02/22-rdf-syntax-ns#type"), st.Object)
+												g.AddTriple(_s, domain.NewResource("http://www.w3.org/1999/02/22-rdf-syntax-ns#type"), st.Object)
 											}
 										}
 									}
 								} else {
-									_s = NewResource(f.URI)
+									_s = domain.NewResource(f.URI)
 									if !showEmpty {
-										g.AddTriple(_s, NewResource("http://www.w3.org/1999/02/22-rdf-syntax-ns#type"), NewResource("http://www.w3.org/ns/ldp#Resource"))
+										g.AddTriple(_s, domain.NewResource("http://www.w3.org/1999/02/22-rdf-syntax-ns#type"), domain.NewResource("http://www.w3.org/ns/ldp#Resource"))
 										// add type if RDF resource
 										//infoUrl, _ := url.Parse(info.Name())
 										guessType := f.FileType
@@ -653,11 +663,11 @@ func (s *Server) handle(w http.ResponseWriter, req *httpRequest) (r *response) {
 											for scanner.Scan() {
 												if strings.HasPrefix(scanner.Text(), "@prefix") || strings.HasPrefix(scanner.Text(), "@base") {
 													kb := NewGraph(f.URI)
-													kb.ReadFile(f.File)
+													s.fileHandler.ReadFile(kb, s.parser, f.File)
 													if kb.Len() > 0 {
-														for _, st := range kb.All(NewResource(f.URI), NewResource("http://www.w3.org/1999/02/22-rdf-syntax-ns#type"), nil) {
+														for _, st := range kb.All(domain.NewResource(f.URI), domain.NewResource("http://www.w3.org/1999/02/22-rdf-syntax-ns#type"), nil) {
 															if st != nil && st.Object != nil {
-																g.AddTriple(_s, NewResource("http://www.w3.org/1999/02/22-rdf-syntax-ns#type"), st.Object)
+																g.AddTriple(_s, domain.NewResource("http://www.w3.org/1999/02/22-rdf-syntax-ns#type"), st.Object)
 															}
 														}
 													}
@@ -672,11 +682,11 @@ func (s *Server) handle(w http.ResponseWriter, req *httpRequest) (r *response) {
 									}
 								}
 								if !showEmpty {
-									g.AddTriple(_s, NewResource("http://www.w3.org/ns/posix/stat#mtime"), NewLiteral(fmt.Sprintf("%d", info.ModTime().Unix())))
-									g.AddTriple(_s, NewResource("http://www.w3.org/ns/posix/stat#size"), NewLiteral(fmt.Sprintf("%d", info.Size())))
+									g.AddTriple(_s, domain.NewResource("http://www.w3.org/ns/posix/stat#mtime"), domain.NewLiteral(fmt.Sprintf("%d", info.ModTime().Unix())))
+									g.AddTriple(_s, domain.NewResource("http://www.w3.org/ns/posix/stat#size"), domain.NewLiteral(fmt.Sprintf("%d", info.Size())))
 								}
 								if showContainment {
-									g.AddTriple(root, NewResource("http://www.w3.org/ns/ldp#contains"), _s)
+									g.AddTriple(root, domain.NewResource("http://www.w3.org/ns/ldp#contains"), _s)
 								}
 							}
 						}
@@ -700,7 +710,7 @@ func (s *Server) handle(w http.ResponseWriter, req *httpRequest) (r *response) {
 			if req.Method == "GET" && strings.Contains(contentType, "text/html") {
 				// delete ETag to force load the app
 				w.Header().Del("ETag")
-				w.Header().Set("Link", brack(resource.MetaURI)+"; rel=\"meta\", "+brack(resource.AclURI)+"; rel=\"acl\"")
+				w.Header().Set("Link", s.uriManipulator.Brack(resource.MetaURI)+"; rel=\"meta\", "+s.uriManipulator.Brack(resource.AclURI)+"; rel=\"acl\"")
 				if maybeRDF {
 					w.Header().Set(HCType, contentType)
 					return r.respond(200, s.templater.Login())
@@ -749,7 +759,7 @@ func (s *Server) handle(w http.ResponseWriter, req *httpRequest) (r *response) {
 		}
 
 		if maybeRDF {
-			g.ReadFile(resource.File)
+			s.fileHandler.ReadFile(g, s.parser, resource.File)
 			w.Header().Set(HCType, contentType)
 		}
 
@@ -764,7 +774,7 @@ func (s *Server) handle(w http.ResponseWriter, req *httpRequest) (r *response) {
 				}
 				go func() {
 					defer wf.Close()
-					err := g.WriteFile(wf, contentType)
+					err := s.fileHandler.WriteFile(g, wf, contentType)
 					if err != nil {
 						errCh <- err
 					}
@@ -781,7 +791,7 @@ func (s *Server) handle(w http.ResponseWriter, req *httpRequest) (r *response) {
 			}()
 			err = <-errCh
 		} else {
-			data, err = g.Serialize(contentType)
+			data, err = s.rdfHandler.Serialize(g, contentType)
 		}
 
 		if err != nil {
@@ -827,11 +837,11 @@ func (s *Server) handle(w http.ResponseWriter, req *httpRequest) (r *response) {
 			}
 
 			g := NewGraph(resource.URI)
-			g.ReadFile(resource.File)
+			s.fileHandler.ReadFile(g, s.parser, resource.File)
 
 			switch dataMime {
 			case "application/json":
-				g.JSONPatch(body)
+				s.JSONPatch(g, body)
 			case "application/sparql-update":
 				sparql := NewSPARQLUpdate(g.URI())
 				sparql.Parse(body)
@@ -841,7 +851,7 @@ func (s *Server) handle(w http.ResponseWriter, req *httpRequest) (r *response) {
 				}
 			default:
 				if dataHasParser {
-					g.Parse(body, dataMime)
+					s.parser.Parse(g, body, dataMime)
 				}
 			}
 
@@ -859,7 +869,7 @@ func (s *Server) handle(w http.ResponseWriter, req *httpRequest) (r *response) {
 			}
 			defer f.Close()
 
-			err = g.WriteFile(f, "text/turtle")
+			err = s.fileHandler.WriteFile(g, f, "text/turtle")
 			if err != nil {
 				s.debug.Println("PATCH g.WriteFile err: " + err.Error())
 				return r.respond(500, err)
@@ -937,9 +947,9 @@ func (s *Server) handle(w http.ResponseWriter, req *httpRequest) (r *response) {
 				}
 
 				w.Header().Set("Location", resource.URI)
-				w.Header().Set("Link", brack(resource.MetaURI)+"; rel=\"meta\", "+brack(resource.AclURI)+"; rel=\"acl\"")
-				w.Header().Add("Link", brack("http://www.w3.org/ns/ldp#Resource")+"; rel=\"type\"")
-				w.Header().Add("Link", brack("http://www.w3.org/ns/ldp#BasicContainer")+"; rel=\"type\"")
+				w.Header().Set("Link", s.uriManipulator.Brack(resource.MetaURI)+"; rel=\"meta\", "+s.uriManipulator.Brack(resource.AclURI)+"; rel=\"acl\"")
+				w.Header().Add("Link", s.uriManipulator.Brack("http://www.w3.org/ns/ldp#Resource")+"; rel=\"type\"")
+				w.Header().Add("Link", s.uriManipulator.Brack("http://www.w3.org/ns/ldp#BasicContainer")+"; rel=\"type\"")
 
 				err = os.MkdirAll(resource.File, 0755)
 				if err != nil {
@@ -975,9 +985,9 @@ func (s *Server) handle(w http.ResponseWriter, req *httpRequest) (r *response) {
 				return r.respond(500, err)
 			}
 			w.Header().Set("Location", resource.URI)
-			w.Header().Set("Link", brack(resource.MetaURI)+"; rel=\"meta\", "+brack(resource.AclURI)+"; rel=\"acl\"")
+			w.Header().Set("Link", s.uriManipulator.Brack(resource.MetaURI)+"; rel=\"meta\", "+s.uriManipulator.Brack(resource.AclURI)+"; rel=\"acl\"")
 			// LDP header
-			w.Header().Add("Link", brack("http://www.w3.org/ns/ldp#Resource")+"; rel=\"type\"")
+			w.Header().Add("Link", s.uriManipulator.Brack("http://www.w3.org/ns/ldp#Resource")+"; rel=\"type\"")
 			isNew = true
 		}
 
@@ -1038,11 +1048,11 @@ func (s *Server) handle(w http.ResponseWriter, req *httpRequest) (r *response) {
 
 			if dataHasParser {
 				g := NewGraph(resource.URI)
-				g.ReadFile(resource.File)
+				s.fileHandler.ReadFile(g, s.parser, resource.File)
 
 				switch dataMime {
 				case "application/json":
-					g.JSONPatch(req.Body)
+					s.JSONPatch(g, req.Body)
 				case "application/sparql-update":
 					sparql := NewSPARQLUpdate(g.URI())
 					sparql.Parse(req.Body)
@@ -1052,7 +1062,7 @@ func (s *Server) handle(w http.ResponseWriter, req *httpRequest) (r *response) {
 						return r.respond(ecode, "Error processing SPARQL Update: "+err.Error())
 					}
 				default:
-					g.Parse(req.Body, dataMime)
+					s.parser.Parse(g, req.Body, dataMime)
 				}
 				f, err := os.OpenFile(resource.File, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0644)
 				if err != nil {
@@ -1061,7 +1071,7 @@ func (s *Server) handle(w http.ResponseWriter, req *httpRequest) (r *response) {
 				}
 				defer f.Close()
 				if g.Len() > 0 {
-					err = g.WriteFile(f, "text/turtle")
+					err = s.fileHandler.WriteFile(g, f, "text/turtle")
 					if err != nil {
 						s.debug.Println("POST g.WriteFile err: " + err.Error())
 					} else {
@@ -1097,7 +1107,7 @@ func (s *Server) handle(w http.ResponseWriter, req *httpRequest) (r *response) {
 		defer unlock()
 
 		// LDP header
-		w.Header().Add("Link", brack("http://www.w3.org/ns/ldp#Resource")+"; rel=\"type\"")
+		w.Header().Add("Link", s.uriManipulator.Brack("http://www.w3.org/ns/ldp#Resource")+"; rel=\"type\"")
 
 		// check append first
 		aclAppend, err := acl.AllowAppend(resource.URI)
@@ -1132,9 +1142,9 @@ func (s *Server) handle(w http.ResponseWriter, req *httpRequest) (r *response) {
 			}
 			// refresh resource and set the right headers
 			resource, err = req.pathInfo(resource.URI)
-			w.Header().Set("Link", brack(resource.MetaURI)+"; rel=\"meta\", "+brack(resource.AclURI)+"; rel=\"acl\"")
+			w.Header().Set("Link", s.uriManipulator.Brack(resource.MetaURI)+"; rel=\"meta\", "+s.uriManipulator.Brack(resource.AclURI)+"; rel=\"acl\"")
 			// LDP header
-			w.Header().Add("Link", brack("http://www.w3.org/ns/ldp#Resource")+"; rel=\"type\"")
+			w.Header().Add("Link", s.uriManipulator.Brack("http://www.w3.org/ns/ldp#Resource")+"; rel=\"type\"")
 
 			onUpdateURI(resource.URI)
 			onUpdateURI(resource.ParentURI)
@@ -1150,7 +1160,7 @@ func (s *Server) handle(w http.ResponseWriter, req *httpRequest) (r *response) {
 		if err != nil {
 			s.debug.Println("PUT os.OpenFile err: " + err.Error())
 			if resource.IsDir {
-				w.Header().Add("Link", brack(resource.URI)+"; rel=\"describedby\"")
+				w.Header().Add("Link", s.uriManipulator.Brack(resource.URI)+"; rel=\"describedby\"")
 				return r.respond(406, "406 - Cannot use PUT on a directory.")
 			}
 			return r.respond(500, err)
@@ -1247,4 +1257,43 @@ func (s *Server) handle(w http.ResponseWriter, req *httpRequest) (r *response) {
 		return r.respond(405, "405 - Method Not Allowed:", req.Method)
 	}
 	return
+}
+
+type jsonPatch map[string]map[string][]struct {
+	Value string `json:"value"`
+	Type  string `json:"type"`
+}
+
+// JSONPatch is used to perform a PATCH operation on a Graph using data from the reader
+func (Server) JSONPatch(g *Graph, r io.Reader) error {
+	v := make(jsonPatch)
+	data, err := ioutil.ReadAll(r)
+	if err != nil {
+		return err
+	}
+	err = json.Unmarshal(data, &v)
+	if err != nil {
+		return err
+	}
+	base, _ := url.Parse(g.uri)
+	for s, sv := range v {
+		su, _ := base.Parse(s)
+		for p, pv := range sv {
+			pu, _ := base.Parse(p)
+			subject := domain.NewResource(su.String())
+			predicate := domain.NewResource(pu.String())
+			for _, triple := range g.All(subject, predicate, nil) {
+				g.Remove(triple)
+			}
+			for _, o := range pv {
+				switch o.Type {
+				case "uri":
+					g.AddTriple(subject, predicate, domain.NewResource(o.Value))
+				case "literal":
+					g.AddTriple(subject, predicate, domain.NewLiteral(o.Value))
+				}
+			}
+		}
+	}
+	return nil
 }

@@ -1,4 +1,4 @@
-package gold
+package domain
 
 import (
 	"testing"
@@ -20,6 +20,6 @@ func TestRDFDebrack(t *testing.T) {
 }
 
 func TestDefrag(t *testing.T) {
-	assert.Equal(t, "test", defrag("test"))
-	assert.Equal(t, "test", defrag("test#me"))
+	assert.Equal(t, "test", Defrag("test"))
+	assert.Equal(t, "test", Defrag("test#me"))
 }

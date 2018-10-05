@@ -16,6 +16,8 @@ import (
 	"sync"
 	"time"
 	"unicode"
+
+	"github.com/err0r500/go-solid-server/domain"
 )
 
 const (
@@ -122,16 +124,16 @@ func WebIDDigestAuth(req *httpRequest) (string, error) {
 	}
 
 	g := NewGraph(authH.Username)
-	err = g.LoadURI(authH.Username)
+	err = req.httpCaller.LoadURI(g, authH.Username)
 	if err != nil {
 		return "", err
 	}
 
 	req.debug.Println("Checking for public keys for user", authH.Username)
-	for _, keyT := range g.All(NewResource(authH.Username), ns.cert.Get("key"), nil) {
-		for range g.All(keyT.Object, ns.rdf.Get("type"), ns.cert.Get("RSAPublicKey")) {
+	for _, keyT := range g.All(domain.NewResource(authH.Username), domain.NewNS("cert").Get("key"), nil) {
+		for range g.All(keyT.Object, domain.NewNS("rdf").Get("type"), domain.NewNS("cert").Get("RSAPublicKey")) {
 			req.debug.Println("Found RSA key in user's profile", keyT.Object.String())
-			for _, pubP := range g.All(keyT.Object, ns.cert.Get("pem"), nil) {
+			for _, pubP := range g.All(keyT.Object, domain.NewNS("cert").Get("pem"), nil) {
 				keyP := term2C(pubP.Object).String()
 				req.debug.Println("Found matching public key in user's profile", keyP[:10], "...", keyP[len(keyP)-10:len(keyP)])
 				parser, err := ParseRSAPublicPEMKey([]byte(keyP))
@@ -144,9 +146,9 @@ func WebIDDigestAuth(req *httpRequest) (string, error) {
 				req.debug.Println("Unable to verify signature with key", keyP[:10], "...", keyP[len(keyP)-10:len(keyP)], "-- reason:", err)
 			}
 			// also loop through modulus/exp
-			for _, pubN := range g.All(keyT.Object, ns.cert.Get("modulus"), nil) {
+			for _, pubN := range g.All(keyT.Object, domain.NewNS("cert").Get("modulus"), nil) {
 				keyN := term2C(pubN.Object).String()
-				for _, pubE := range g.All(keyT.Object, ns.cert.Get("exponent"), nil) {
+				for _, pubE := range g.All(keyT.Object, domain.NewNS("cert").Get("exponent"), nil) {
 					keyE := term2C(pubE.Object).String()
 					req.debug.Println("Found matching modulus and exponent in user's profile", keyN[:10], "...", keyN[len(keyN)-10:len(keyN)])
 					parser, err := ParseRSAPublicKeyNE("RSAPublicKey", keyN, keyE)
@@ -234,26 +236,26 @@ func WebIDTLSAuth(req *httpRequest) (uri string, err error) {
 		// pkey from client contains WebID claim
 
 		g := NewGraph(claim)
-		err = g.LoadURI(claim)
+		err = req.httpCaller.LoadURI(g, claim)
 		if err != nil {
 			return "", err
 		}
 
-		for _, keyT := range g.All(NewResource(claim), ns.cert.Get("key"), nil) {
+		for _, keyT := range g.All(domain.NewResource(claim), domain.NewNS("cert").Get("key"), nil) {
 			// found pkey in the profile
-			for range g.All(keyT.Object, ns.rdf.Get("type"), ns.cert.Get(t)) {
-				for range g.All(keyT.Object, ns.cert.Get("modulus"), NewLiteral(n)) {
+			for range g.All(keyT.Object, domain.NewNS("rdf").Get("type"), domain.NewNS("cert").Get(t)) {
+				for range g.All(keyT.Object, domain.NewNS("cert").Get("modulus"), domain.NewLiteral(n)) {
 					goto matchModulus
 				}
-				for range g.All(keyT.Object, ns.cert.Get("modulus"), NewLiteralWithDatatype(n, NewResource("http://www.w3.org/2001/XMLSchema#hexBinary"))) {
+				for range g.All(keyT.Object, domain.NewNS("cert").Get("modulus"), domain.NewLiteralWithDatatype(n, domain.NewResource("http://www.w3.org/2001/XMLSchema#hexBinary"))) {
 					goto matchModulus
 				}
 			matchModulus:
 				// found a matching modulus in the profile
-				for range g.All(keyT.Object, ns.cert.Get("exponent"), NewLiteral(e)) {
+				for range g.All(keyT.Object, domain.NewNS("cert").Get("exponent"), domain.NewLiteral(e)) {
 					goto matchExponent
 				}
-				for range g.All(keyT.Object, ns.cert.Get("exponent"), NewLiteralWithDatatype(e, NewResource("http://www.w3.org/2001/XMLSchema#int"))) {
+				for range g.All(keyT.Object, domain.NewNS("cert").Get("exponent"), domain.NewLiteralWithDatatype(e, domain.NewResource("http://www.w3.org/2001/XMLSchema#int"))) {
 					goto matchExponent
 				}
 			matchExponent:
@@ -301,14 +303,14 @@ func AddProfileKeys(uri string, g *Graph) (*Graph, *rsa.PrivateKey, *rsa.PublicK
 	pub := &priv.PublicKey
 
 	profileURI := strings.Split(uri, "#")[0]
-	userTerm := NewResource(uri)
-	keyTerm := NewResource(profileURI + "#key")
+	userTerm := domain.NewResource(uri)
+	keyTerm := domain.NewResource(profileURI + "#key")
 
-	g.AddTriple(userTerm, ns.cert.Get("key"), keyTerm)
-	g.AddTriple(keyTerm, ns.rdf.Get("type"), ns.cert.Get("RSAPublicKey"))
-	g.AddTriple(keyTerm, ns.dct.Get("title"), NewLiteral("Created  "+time.Now().Format(time.RFC822)))
-	g.AddTriple(keyTerm, ns.cert.Get("modulus"), NewLiteralWithDatatype(fmt.Sprintf("%x", pub.N), NewResource("http://www.w3.org/2001/XMLSchema#hexBinary")))
-	g.AddTriple(keyTerm, ns.cert.Get("exponent"), NewLiteralWithDatatype(fmt.Sprintf("%d", pub.E), NewResource("http://www.w3.org/2001/XMLSchema#int")))
+	g.AddTriple(userTerm, domain.NewNS("cert").Get("key"), keyTerm)
+	g.AddTriple(keyTerm, domain.NewNS("rdf").Get("type"), domain.NewNS("cert").Get("RSAPublicKey"))
+	g.AddTriple(keyTerm, domain.NewNS("dct").Get("title"), domain.NewLiteral("Created  "+time.Now().Format(time.RFC822)))
+	g.AddTriple(keyTerm, domain.NewNS("cert").Get("modulus"), domain.NewLiteralWithDatatype(fmt.Sprintf("%x", pub.N), domain.NewResource("http://www.w3.org/2001/XMLSchema#hexBinary")))
+	g.AddTriple(keyTerm, domain.NewNS("cert").Get("exponent"), domain.NewLiteralWithDatatype(fmt.Sprintf("%d", pub.E), domain.NewResource("http://www.w3.org/2001/XMLSchema#int")))
 
 	return g, priv, pub, nil
 }
@@ -319,18 +321,18 @@ func (req *httpRequest) AddCertKeys(uri string, mod string, exp string) error {
 	uuid = uuid[:4]
 
 	profileURI := strings.Split(uri, "#")[0]
-	userTerm := NewResource(uri)
-	keyTerm := NewResource(profileURI + "#key" + uuid)
+	userTerm := domain.NewResource(uri)
+	keyTerm := domain.NewResource(profileURI + "#key" + uuid)
 
 	resource, _ := req.pathInfo(profileURI)
 
 	g := NewGraph(profileURI)
-	g.ReadFile(resource.File)
-	g.AddTriple(userTerm, ns.cert.Get("key"), keyTerm)
-	g.AddTriple(keyTerm, ns.rdf.Get("type"), ns.cert.Get("RSAPublicKey"))
-	g.AddTriple(keyTerm, ns.rdfs.Get("label"), NewLiteral("Created "+time.Now().Format(time.RFC822)+" on "+resource.Obj.Host))
-	g.AddTriple(keyTerm, ns.cert.Get("modulus"), NewLiteralWithDatatype(mod, NewResource("http://www.w3.org/2001/XMLSchema#hexBinary")))
-	g.AddTriple(keyTerm, ns.cert.Get("exponent"), NewLiteralWithDatatype(exp, NewResource("http://www.w3.org/2001/XMLSchema#int")))
+	req.fileHandler.ReadFile(g, req.parser, resource.File)
+	g.AddTriple(userTerm, domain.NewNS("cert").Get("key"), keyTerm)
+	g.AddTriple(keyTerm, domain.NewNS("rdf").Get("type"), domain.NewNS("cert").Get("RSAPublicKey"))
+	g.AddTriple(keyTerm, domain.NewNS("rdfs").Get("label"), domain.NewLiteral("Created "+time.Now().Format(time.RFC822)+" on "+resource.Obj.Host))
+	g.AddTriple(keyTerm, domain.NewNS("cert").Get("modulus"), domain.NewLiteralWithDatatype(mod, domain.NewResource("http://www.w3.org/2001/XMLSchema#hexBinary")))
+	g.AddTriple(keyTerm, domain.NewNS("cert").Get("exponent"), domain.NewLiteralWithDatatype(exp, domain.NewResource("http://www.w3.org/2001/XMLSchema#int")))
 
 	// open account acl file
 	f, err := os.OpenFile(resource.File, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0644)
@@ -340,7 +342,7 @@ func (req *httpRequest) AddCertKeys(uri string, mod string, exp string) error {
 	defer f.Close()
 
 	// write account acl to disk
-	err = g.WriteFile(f, "text/turtle")
+	err = req.fileHandler.WriteFile(g, f, "text/turtle")
 	if err != nil {
 		return err
 	}
@@ -351,38 +353,38 @@ func (req *httpRequest) AddCertKeys(uri string, mod string, exp string) error {
 // NewWebIDProfile creates a WebID profile graph based on account data
 func NewWebIDProfile(account webidAccount) *Graph {
 	profileURI := strings.Split(account.WebID, "#")[0]
-	userTerm := NewResource(account.WebID)
-	profileTerm := NewResource(profileURI)
+	userTerm := domain.NewResource(account.WebID)
+	profileTerm := domain.NewResource(profileURI)
 
 	g := NewGraph(profileURI)
-	g.AddTriple(profileTerm, ns.rdf.Get("type"), ns.foaf.Get("PersonalProfileDocument"))
-	g.AddTriple(profileTerm, ns.foaf.Get("maker"), userTerm)
-	g.AddTriple(profileTerm, ns.foaf.Get("primaryTopic"), userTerm)
+	g.AddTriple(profileTerm, domain.NewNS("rdf").Get("type"), domain.NewNS("foaf").Get("PersonalProfileDocument"))
+	g.AddTriple(profileTerm, domain.NewNS("foaf").Get("maker"), userTerm)
+	g.AddTriple(profileTerm, domain.NewNS("foaf").Get("primaryTopic"), userTerm)
 
-	g.AddTriple(userTerm, ns.rdf.Get("type"), ns.foaf.Get("Person"))
+	g.AddTriple(userTerm, domain.NewNS("rdf").Get("type"), domain.NewNS("foaf").Get("Person"))
 	if len(account.Name) > 0 {
-		g.AddTriple(profileTerm, ns.dct.Get("title"), NewLiteral("WebID profile of "+account.Name))
-		g.AddTriple(userTerm, ns.foaf.Get("name"), NewLiteral(account.Name))
+		g.AddTriple(profileTerm, domain.NewNS("dct").Get("title"), domain.NewLiteral("WebID profile of "+account.Name))
+		g.AddTriple(userTerm, domain.NewNS("foaf").Get("name"), domain.NewLiteral(account.Name))
 	}
 	if len(account.Img) > 0 {
-		g.AddTriple(userTerm, ns.foaf.Get("img"), NewResource(account.Img))
+		g.AddTriple(userTerm, domain.NewNS("foaf").Get("img"), domain.NewResource(account.Img))
 	}
 	if len(account.Agent) > 0 {
-		g.AddTriple(userTerm, ns.acl.Get("delegates"), NewResource(account.Agent))
+		g.AddTriple(userTerm, domain.NewNS("acl").Get("delegates"), domain.NewResource(account.Agent))
 	}
-	g.AddTriple(userTerm, ns.space.Get("storage"), NewResource(account.BaseURI+"/"))
-	g.AddTriple(userTerm, ns.space.Get("preferencesFile"), NewResource(account.PrefURI))
-	g.AddTriple(userTerm, ns.st.Get("privateTypeIndex"), NewResource(account.PrivTypeIndex))
-	g.AddTriple(userTerm, ns.st.Get("publicTypeIndex"), NewResource(account.PubTypeIndex))
-	g.AddTriple(userTerm, ns.ldp.Get("inbox"), NewResource(account.BaseURI+"/Inbox/"))
-	g.AddTriple(userTerm, ns.st.Get("timeline"), NewResource(account.BaseURI+"/Timeline/"))
+	g.AddTriple(userTerm, domain.NewNS("space").Get("storage"), domain.NewResource(account.BaseURI+"/"))
+	g.AddTriple(userTerm, domain.NewNS("space").Get("preferencesFile"), domain.NewResource(account.PrefURI))
+	g.AddTriple(userTerm, domain.NewNS("st").Get("privateTypeIndex"), domain.NewResource(account.PrivTypeIndex))
+	g.AddTriple(userTerm, domain.NewNS("st").Get("publicTypeIndex"), domain.NewResource(account.PubTypeIndex))
+	g.AddTriple(userTerm, domain.NewNS("ldp").Get("inbox"), domain.NewResource(account.BaseURI+"/Inbox/"))
+	g.AddTriple(userTerm, domain.NewNS("st").Get("timeline"), domain.NewResource(account.BaseURI+"/Timeline/"))
 
 	// add proxy and query endpoints
 	if len(account.ProxyURI) > 0 {
-		g.AddTriple(userTerm, ns.st.Get("proxyTemplate"), NewResource(account.ProxyURI))
+		g.AddTriple(userTerm, domain.NewNS("st").Get("proxyTemplate"), domain.NewResource(account.ProxyURI))
 	}
 	if len(account.QueryURI) > 0 {
-		g.AddTriple(userTerm, ns.st.Get("queryEndpoint"), NewResource(account.QueryURI))
+		g.AddTriple(userTerm, domain.NewNS("st").Get("queryEndpoint"), domain.NewResource(account.QueryURI))
 	}
 
 	return g
@@ -393,7 +395,7 @@ func (req *httpRequest) LinkToWebID(account webidAccount) error {
 	resource, _ := req.pathInfo(account.BaseURI + "/")
 
 	g := NewGraph(resource.URI)
-	g.AddTriple(NewResource(account.WebID), ns.st.Get("account"), NewResource(resource.URI))
+	g.AddTriple(domain.NewResource(account.WebID), domain.NewNS("st").Get("account"), domain.NewResource(resource.URI))
 
 	// open account root meta file
 	f, err := os.OpenFile(resource.MetaFile, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0644)
@@ -403,7 +405,7 @@ func (req *httpRequest) LinkToWebID(account webidAccount) error {
 	defer f.Close()
 
 	// write account meta file to disk
-	err = g.WriteFile(f, "text/turtle")
+	err = req.fileHandler.WriteFile(g, f, "text/turtle")
 	if err != nil {
 		return err
 	}
@@ -416,11 +418,11 @@ func (req *httpRequest) getAccountWebID() string {
 	if err == nil {
 		resource, _ = req.pathInfo(resource.Base)
 		g := NewGraph(resource.MetaURI)
-		g.ReadFile(resource.MetaFile)
+		req.fileHandler.ReadFile(g, req.parser, resource.MetaFile)
 		if g.Len() >= 1 {
-			webid := g.One(nil, ns.st.Get("account"), NewResource(resource.MetaURI))
+			webid := g.One(nil, domain.NewNS("st").Get("account"), domain.NewResource(resource.MetaURI))
 			if webid != nil {
-				return debrack(webid.Subject.String())
+				return req.uriManipulator.Debrack(webid.Subject.String())
 			}
 		}
 	}
@@ -431,12 +433,12 @@ func (req *httpRequest) getAccountWebID() string {
 // AddWorkspaces creates all the necessary workspaces corresponding to a new account
 func (req *httpRequest) AddWorkspaces(account webidAccount, g *Graph) error {
 	pref := NewGraph(account.PrefURI)
-	prefTerm := NewResource(account.PrefURI)
-	pref.AddTriple(prefTerm, ns.rdf.Get("type"), ns.space.Get("ConfigurationFile"))
-	pref.AddTriple(prefTerm, ns.dct.Get("title"), NewLiteral("Preferences file"))
+	prefTerm := domain.NewResource(account.PrefURI)
+	pref.AddTriple(prefTerm, domain.NewNS("rdf").Get("type"), domain.NewNS("space").Get("ConfigurationFile"))
+	pref.AddTriple(prefTerm, domain.NewNS("dct").Get("title"), domain.NewLiteral("Preferences file"))
 
-	pref.AddTriple(NewResource(account.WebID), ns.space.Get("preferencesFile"), NewResource(account.PrefURI))
-	pref.AddTriple(NewResource(account.WebID), ns.rdf.Get("type"), ns.foaf.Get("Person"))
+	pref.AddTriple(domain.NewResource(account.WebID), domain.NewNS("space").Get("preferencesFile"), domain.NewResource(account.PrefURI))
+	pref.AddTriple(domain.NewResource(account.WebID), domain.NewNS("rdf").Get("type"), domain.NewNS("foaf").Get("Person"))
 
 	for _, ws := range workspaces {
 		resource, _ := req.pathInfo(account.BaseURI + "/" + ws.Name + "/")
@@ -447,34 +449,34 @@ func (req *httpRequest) AddWorkspaces(account webidAccount, g *Graph) error {
 
 		// Write ACLs
 		// No one but the user is allowed access by default
-		aclTerm := NewResource(resource.AclURI + "#owner")
-		wsTerm := NewResource(resource.URI)
+		aclTerm := domain.NewResource(resource.AclURI + "#owner")
+		wsTerm := domain.NewResource(resource.URI)
 		a := NewGraph(resource.AclURI)
-		a.AddTriple(aclTerm, ns.rdf.Get("type"), ns.acl.Get("Authorization"))
-		a.AddTriple(aclTerm, ns.acl.Get("accessTo"), wsTerm)
-		a.AddTriple(aclTerm, ns.acl.Get("accessTo"), NewResource(resource.AclURI))
-		a.AddTriple(aclTerm, ns.acl.Get("agent"), NewResource(account.WebID))
+		a.AddTriple(aclTerm, domain.NewNS("rdf").Get("type"), domain.NewNS("acl").Get("Authorization"))
+		a.AddTriple(aclTerm, domain.NewNS("acl").Get("accessTo"), wsTerm)
+		a.AddTriple(aclTerm, domain.NewNS("acl").Get("accessTo"), domain.NewResource(resource.AclURI))
+		a.AddTriple(aclTerm, domain.NewNS("acl").Get("agent"), domain.NewResource(account.WebID))
 		if len(req.FormValue("email")) > 0 {
-			a.AddTriple(aclTerm, ns.acl.Get("agent"), NewResource("mailto:"+account.Email))
+			a.AddTriple(aclTerm, domain.NewNS("acl").Get("agent"), domain.NewResource("mailto:"+account.Email))
 		}
-		a.AddTriple(aclTerm, ns.acl.Get("defaultForNew"), wsTerm)
-		a.AddTriple(aclTerm, ns.acl.Get("mode"), ns.acl.Get("Read"))
-		a.AddTriple(aclTerm, ns.acl.Get("mode"), ns.acl.Get("Write"))
-		a.AddTriple(aclTerm, ns.acl.Get("mode"), ns.acl.Get("Control"))
+		a.AddTriple(aclTerm, domain.NewNS("acl").Get("defaultForNew"), wsTerm)
+		a.AddTriple(aclTerm, domain.NewNS("acl").Get("mode"), domain.NewNS("acl").Get("Read"))
+		a.AddTriple(aclTerm, domain.NewNS("acl").Get("mode"), domain.NewNS("acl").Get("Write"))
+		a.AddTriple(aclTerm, domain.NewNS("acl").Get("mode"), domain.NewNS("acl").Get("Control"))
 		if ws.Type == "PublicWorkspace" {
-			readAllTerm := NewResource(resource.AclURI + "#readall")
-			a.AddTriple(readAllTerm, ns.rdf.Get("type"), ns.acl.Get("Authorization"))
-			a.AddTriple(readAllTerm, ns.acl.Get("accessTo"), wsTerm)
-			a.AddTriple(readAllTerm, ns.acl.Get("agentClass"), ns.foaf.Get("Agent"))
-			a.AddTriple(readAllTerm, ns.acl.Get("mode"), ns.acl.Get("Read"))
+			readAllTerm := domain.NewResource(resource.AclURI + "#readall")
+			a.AddTriple(readAllTerm, domain.NewNS("rdf").Get("type"), domain.NewNS("acl").Get("Authorization"))
+			a.AddTriple(readAllTerm, domain.NewNS("acl").Get("accessTo"), wsTerm)
+			a.AddTriple(readAllTerm, domain.NewNS("acl").Get("agentClass"), domain.NewNS("foaf").Get("Agent"))
+			a.AddTriple(readAllTerm, domain.NewNS("acl").Get("mode"), domain.NewNS("acl").Get("Read"))
 		}
 		// Special case for Inbox (append only)
 		if ws.Name == "Inbox" {
-			appendAllTerm := NewResource(resource.AclURI + "#apendall")
-			a.AddTriple(appendAllTerm, ns.rdf.Get("type"), ns.acl.Get("Authorization"))
-			a.AddTriple(appendAllTerm, ns.acl.Get("accessTo"), wsTerm)
-			a.AddTriple(appendAllTerm, ns.acl.Get("agentClass"), ns.foaf.Get("Agent"))
-			a.AddTriple(appendAllTerm, ns.acl.Get("mode"), ns.acl.Get("Append"))
+			appendAllTerm := domain.NewResource(resource.AclURI + "#apendall")
+			a.AddTriple(appendAllTerm, domain.NewNS("rdf").Get("type"), domain.NewNS("acl").Get("Authorization"))
+			a.AddTriple(appendAllTerm, domain.NewNS("acl").Get("accessTo"), wsTerm)
+			a.AddTriple(appendAllTerm, domain.NewNS("acl").Get("agentClass"), domain.NewNS("foaf").Get("Agent"))
+			a.AddTriple(appendAllTerm, domain.NewNS("acl").Get("mode"), domain.NewNS("acl").Get("Append"))
 		}
 
 		// open account acl file
@@ -485,20 +487,20 @@ func (req *httpRequest) AddWorkspaces(account webidAccount, g *Graph) error {
 		defer f.Close()
 
 		// write account acl to disk
-		err = a.WriteFile(f, "text/turtle")
+		err = req.fileHandler.WriteFile(a, f, "text/turtle")
 		if err != nil {
 			return err
 		}
 
 		// Append workspace URL to the preferencesFile
 		//if ws.Name != "Inbox" || ws.Name != "Timeline" {
-			pref.AddTriple(wsTerm, ns.rdf.Get("type"), ns.space.Get("Workspace"))
-			if len(ws.Type) > 0 {
-				pref.AddTriple(wsTerm, ns.rdf.Get("type"), ns.space.Get(ws.Type))
-			}
-			pref.AddTriple(wsTerm, ns.dct.Get("title"), NewLiteral(ws.Label))
+		pref.AddTriple(wsTerm, domain.NewNS("rdf").Get("type"), domain.NewNS("space").Get("Workspace"))
+		if len(ws.Type) > 0 {
+			pref.AddTriple(wsTerm, domain.NewNS("rdf").Get("type"), domain.NewNS("space").Get(ws.Type))
+		}
+		pref.AddTriple(wsTerm, domain.NewNS("dct").Get("title"), domain.NewLiteral(ws.Label))
 
-			pref.AddTriple(NewResource(account.WebID), ns.space.Get("workspace"), wsTerm)
+		pref.AddTriple(domain.NewResource(account.WebID), domain.NewNS("space").Get("workspace"), wsTerm)
 		//}
 	}
 
@@ -514,7 +516,7 @@ func (req *httpRequest) AddWorkspaces(account webidAccount, g *Graph) error {
 	}
 
 	// write account acl to disk
-	err = pref.WriteFile(f, "text/turtle")
+	err = req.fileHandler.WriteFile(pref, f, "text/turtle")
 	if err != nil {
 		return err
 	}
@@ -529,8 +531,8 @@ func (req *httpRequest) AddWorkspaces(account webidAccount, g *Graph) error {
 
 func createTypeIndex(req *httpRequest, indexType, url string) error {
 	typeIndex := NewGraph(url)
-	typeIndex.AddTriple(NewResource(url), ns.rdf.Get("type"), ns.st.Get("TypeIndex"))
-	typeIndex.AddTriple(NewResource(url), ns.rdf.Get("type"), ns.st.Get(indexType))
+	typeIndex.AddTriple(domain.NewResource(url), domain.NewNS("rdf").Get("type"), domain.NewNS("st").Get("TypeIndex"))
+	typeIndex.AddTriple(domain.NewResource(url), domain.NewNS("rdf").Get("type"), domain.NewNS("st").Get(indexType))
 
 	resource, _ := req.pathInfo(url)
 	err := os.MkdirAll(_path.Dir(resource.File), 0755)
@@ -545,6 +547,6 @@ func createTypeIndex(req *httpRequest, indexType, url string) error {
 	defer f.Close()
 
 	// write account acl to disk
-	err = typeIndex.WriteFile(f, "text/turtle")
+	err = req.fileHandler.WriteFile(typeIndex, f, "text/turtle")
 	return err
 }

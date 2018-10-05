@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/boltdb/bolt"
+	"github.com/err0r500/go-solid-server/domain"
 )
 
 // SystemReturn is a generic HTTP response specific to system APIs
@@ -123,13 +124,13 @@ func logIn(w http.ResponseWriter, req *httpRequest, s *Server) SystemReturn {
 	// try to fetch hashed password from root ,acl
 	resource, _ = req.pathInfo(resource.Base)
 	kb := NewGraph(resource.AclURI)
-	kb.ReadFile(resource.AclFile)
+	s.fileHandler.ReadFile(kb, s.parser, resource.AclFile)
 	s.debug.Println("Looking for password in", resource.AclFile)
 	// find the policy containing root acl
-	for _, m := range kb.All(nil, ns.acl.Get("mode"), ns.acl.Get("Control")) {
-		p := kb.One(m.Subject, ns.acl.Get("password"), nil)
-		if p != nil && kb.One(m.Subject, ns.acl.Get("agent"), NewResource(webid)) != nil {
-			passL = unquote(p.Object.String())
+	for _, m := range kb.All(nil, domain.NewNS("acl").Get("mode"), domain.NewNS("acl").Get("Control")) {
+		p := kb.One(m.Subject, domain.NewNS("acl").Get("password"), nil)
+		if p != nil && kb.One(m.Subject, domain.NewNS("acl").Get("agent"), domain.NewResource(webid)) != nil {
+			passL = s.uriManipulator.Unquote(p.Object.String())
 			break
 		}
 	}
@@ -218,11 +219,11 @@ func sendRecoveryToken(w http.ResponseWriter, req *httpRequest, s *Server) Syste
 	resource, _ = req.pathInfo(resource.Base)
 	email := ""
 	kb := NewGraph(resource.AclURI)
-	kb.ReadFile(resource.AclFile)
+	s.fileHandler.ReadFile(kb, s.parser, resource.AclFile)
 	// find the policy containing root acl
-	for range kb.All(nil, ns.acl.Get("accessTo"), NewResource(resource.AclURI)) {
-		for _, t := range kb.All(nil, ns.acl.Get("agent"), nil) {
-			email = debrack(t.Object.String())
+	for range kb.All(nil, domain.NewNS("acl").Get("accessTo"), domain.NewResource(resource.AclURI)) {
+		for _, t := range kb.All(nil, domain.NewNS("acl").Get("agent"), nil) {
+			email = s.uriManipulator.Debrack(t.Object.String())
 			if strings.HasPrefix(email, "mailto:") {
 				email = strings.TrimPrefix(email, "mailto:")
 				break
@@ -299,19 +300,19 @@ func validateRecoveryToken(w http.ResponseWriter, req *httpRequest, s *Server) S
 		resource, _ = req.pathInfo(accountBase)
 
 		g := NewGraph(resource.AclURI)
-		g.ReadFile(resource.AclFile)
+		s.fileHandler.ReadFile(g, s.parser, resource.AclFile)
 		// find the policy containing root acl
-		for _, m := range g.All(nil, ns.acl.Get("mode"), ns.acl.Get("Control")) {
-			p := g.One(m.Subject, ns.acl.Get("agent"), NewResource(webid))
+		for _, m := range g.All(nil, domain.NewNS("acl").Get("mode"), domain.NewNS("acl").Get("Control")) {
+			p := g.One(m.Subject, domain.NewNS("acl").Get("agent"), domain.NewResource(webid))
 			if p != nil {
-				passT := g.One(nil, ns.acl.Get("password"), nil)
+				passT := g.One(nil, domain.NewNS("acl").Get("password"), nil)
 				// remove old password
 				if passT != nil {
 					g.Remove(passT)
 				}
 			}
 			// add new password
-			g.AddTriple(m.Subject, ns.acl.Get("password"), NewLiteral(saltedPassword(s.Config.Salt, pass)))
+			g.AddTriple(m.Subject, domain.NewNS("acl").Get("password"), domain.NewLiteral(saltedPassword(s.Config.Salt, pass)))
 
 			// write account acl to disk
 			// open account acl file
@@ -321,7 +322,7 @@ func validateRecoveryToken(w http.ResponseWriter, req *httpRequest, s *Server) S
 				return SystemReturn{Status: 500, Body: err.Error()}
 			}
 			defer f.Close()
-			err = g.WriteFile(f, "text/turtle")
+			err = s.fileHandler.WriteFile(g, f, "text/turtle")
 			if err != nil {
 				s.debug.Println("Could not save account acl file with new password. Error: " + err.Error())
 				return SystemReturn{Status: 500, Body: err.Error()}
@@ -410,27 +411,27 @@ func newAccount(w http.ResponseWriter, req *httpRequest, s *Server) SystemReturn
 	g := NewWebIDProfile(account)
 
 	// write WebID profile to disk
-	err = g.WriteFile(f, "text/turtle")
+	err = s.fileHandler.WriteFile(g, f, "text/turtle")
 	if err != nil {
 		s.debug.Println("Saving profile error: " + err.Error())
 		return SystemReturn{Status: 500, Body: err.Error()}
 	}
 
 	// Write ACL for the profile
-	aclTerm := NewResource(resource.AclURI + "#owner")
+	aclTerm := domain.NewResource(resource.AclURI + "#owner")
 	g = NewGraph(resource.AclURI)
-	g.AddTriple(aclTerm, ns.rdf.Get("type"), ns.acl.Get("Authorization"))
-	g.AddTriple(aclTerm, ns.acl.Get("accessTo"), NewResource(webidURL))
-	g.AddTriple(aclTerm, ns.acl.Get("accessTo"), NewResource(resource.AclURI))
-	g.AddTriple(aclTerm, ns.acl.Get("agent"), NewResource(webidURI))
-	g.AddTriple(aclTerm, ns.acl.Get("mode"), ns.acl.Get("Read"))
-	g.AddTriple(aclTerm, ns.acl.Get("mode"), ns.acl.Get("Write"))
-	g.AddTriple(aclTerm, ns.acl.Get("mode"), ns.acl.Get("Control"))
-	readAllTerm := NewResource(resource.AclURI + "#readall")
-	g.AddTriple(readAllTerm, ns.rdf.Get("type"), ns.acl.Get("Authorization"))
-	g.AddTriple(readAllTerm, ns.acl.Get("accessTo"), NewResource(webidURL))
-	g.AddTriple(readAllTerm, ns.acl.Get("agentClass"), ns.foaf.Get("Agent"))
-	g.AddTriple(readAllTerm, ns.acl.Get("mode"), ns.acl.Get("Read"))
+	g.AddTriple(aclTerm, domain.NewNS("type").Get("type"), domain.NewNS("acl").Get("Authorization"))
+	g.AddTriple(aclTerm, domain.NewNS("acl").Get("accessTo"), domain.NewResource(webidURL))
+	g.AddTriple(aclTerm, domain.NewNS("acl").Get("accessTo"), domain.NewResource(resource.AclURI))
+	g.AddTriple(aclTerm, domain.NewNS("acl").Get("agent"), domain.NewResource(webidURI))
+	g.AddTriple(aclTerm, domain.NewNS("acl").Get("mode"), domain.NewNS("acl").Get("Read"))
+	g.AddTriple(aclTerm, domain.NewNS("acl").Get("mode"), domain.NewNS("acl").Get("Write"))
+	g.AddTriple(aclTerm, domain.NewNS("acl").Get("mode"), domain.NewNS("acl").Get("Control"))
+	readAllTerm := domain.NewResource(resource.AclURI + "#readall")
+	g.AddTriple(readAllTerm, domain.NewNS("rdf").Get("type"), domain.NewNS("acl").Get("Authorization"))
+	g.AddTriple(readAllTerm, domain.NewNS("acl").Get("accessTo"), domain.NewResource(webidURL))
+	g.AddTriple(readAllTerm, domain.NewNS("acl").Get("agentClass"), domain.NewNS("foaf").Get("Agent"))
+	g.AddTriple(readAllTerm, domain.NewNS("acl").Get("mode"), domain.NewNS("acl").Get("Read"))
 	// open profile acl file
 	f, err = os.OpenFile(resource.AclFile, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0644)
 	if err != nil {
@@ -440,7 +441,7 @@ func newAccount(w http.ResponseWriter, req *httpRequest, s *Server) SystemReturn
 	defer f.Close()
 
 	// write profile acl to disk
-	err = g.WriteFile(f, "text/turtle")
+	err = s.fileHandler.WriteFile(g, f, "text/turtle")
 	if err != nil {
 		s.debug.Println("Saving profile acl error: " + err.Error())
 		return SystemReturn{Status: 500, Body: err.Error()}
@@ -463,22 +464,22 @@ func newAccount(w http.ResponseWriter, req *httpRequest, s *Server) SystemReturn
 	// Write default ACL for the whole account space
 	// No one but the user is allowed access by default
 	resource, _ = req.pathInfo(accountBase)
-	aclTerm = NewResource(resource.AclURI + "#owner")
+	aclTerm = domain.NewResource(resource.AclURI + "#owner")
 	g = NewGraph(resource.AclURI)
-	g.AddTriple(aclTerm, ns.rdf.Get("type"), ns.acl.Get("Authorization"))
-	g.AddTriple(aclTerm, ns.acl.Get("accessTo"), NewResource(resource.URI))
-	g.AddTriple(aclTerm, ns.acl.Get("accessTo"), NewResource(resource.AclURI))
-	g.AddTriple(aclTerm, ns.acl.Get("agent"), NewResource(webidURI))
+	g.AddTriple(aclTerm, domain.NewNS("rdf").Get("type"), domain.NewNS("acl").Get("Authorization"))
+	g.AddTriple(aclTerm, domain.NewNS("acl").Get("accessTo"), domain.NewResource(resource.URI))
+	g.AddTriple(aclTerm, domain.NewNS("acl").Get("accessTo"), domain.NewResource(resource.AclURI))
+	g.AddTriple(aclTerm, domain.NewNS("acl").Get("agent"), domain.NewResource(webidURI))
 	if len(req.FormValue("password")) > 0 {
-		g.AddTriple(aclTerm, ns.acl.Get("password"), NewLiteral(saltedPassword(s.Config.Salt, req.FormValue("password"))))
+		g.AddTriple(aclTerm, domain.NewNS("acl").Get("password"), domain.NewLiteral(saltedPassword(s.Config.Salt, req.FormValue("password"))))
 	}
 	if len(req.FormValue("email")) > 0 {
-		g.AddTriple(aclTerm, ns.acl.Get("agent"), NewResource("mailto:"+req.FormValue("email")))
+		g.AddTriple(aclTerm, domain.NewNS("acl").Get("agent"), domain.NewResource("mailto:"+req.FormValue("email")))
 	}
-	g.AddTriple(aclTerm, ns.acl.Get("defaultForNew"), NewResource(resource.URI))
-	g.AddTriple(aclTerm, ns.acl.Get("mode"), ns.acl.Get("Read"))
-	g.AddTriple(aclTerm, ns.acl.Get("mode"), ns.acl.Get("Write"))
-	g.AddTriple(aclTerm, ns.acl.Get("mode"), ns.acl.Get("Control"))
+	g.AddTriple(aclTerm, domain.NewNS("acl").Get("defaultForNew"), domain.NewResource(resource.URI))
+	g.AddTriple(aclTerm, domain.NewNS("acl").Get("mode"), domain.NewNS("acl").Get("Read"))
+	g.AddTriple(aclTerm, domain.NewNS("acl").Get("mode"), domain.NewNS("acl").Get("Write"))
+	g.AddTriple(aclTerm, domain.NewNS("acl").Get("mode"), domain.NewNS("acl").Get("Control"))
 	// open account acl file
 	f, err = os.OpenFile(resource.AclFile, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0644)
 	if err != nil {
@@ -488,7 +489,7 @@ func newAccount(w http.ResponseWriter, req *httpRequest, s *Server) SystemReturn
 	defer f.Close()
 
 	// write account acl to disk
-	err = g.WriteFile(f, "text/turtle")
+	err = s.fileHandler.WriteFile(g, f, "text/turtle")
 	if err != nil {
 		s.debug.Println("Saving account acl error: " + err.Error())
 		return SystemReturn{Status: 500, Body: err.Error()}

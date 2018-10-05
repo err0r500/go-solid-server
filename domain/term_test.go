@@ -1,9 +1,10 @@
-package gold
+package domain
 
 import (
-	"github.com/stretchr/testify/assert"
 	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestLiteralEqual(t *testing.T) {

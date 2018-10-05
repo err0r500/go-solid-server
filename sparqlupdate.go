@@ -7,6 +7,8 @@ import (
 	"io/ioutil"
 	"strings"
 	"text/scanner"
+
+	"github.com/err0r500/go-solid-server/domain"
 )
 
 // SPARQLUpdateQuery contains a verb, the body of the query and the graph
@@ -14,13 +16,14 @@ type SPARQLUpdateQuery struct {
 	verb string
 	body string
 
-	graph AnyGraph
+	graph Graph
 }
 
 // SPARQLUpdate contains the base URI and a list of queries
 type SPARQLUpdate struct {
 	baseURI string
 	queries []SPARQLUpdateQuery
+	parser  Parser
 }
 
 // NewSPARQLUpdate creates a new SPARQL object
@@ -28,6 +31,7 @@ func NewSPARQLUpdate(baseURI string) *SPARQLUpdate {
 	return &SPARQLUpdate{
 		baseURI: baseURI,
 		queries: []SPARQLUpdateQuery{},
+		parser:  OrigParser{},
 	}
 }
 
@@ -62,10 +66,10 @@ func (sparql *SPARQLUpdate) Parse(src io.Reader) error {
 			if level == 0 {
 				query := SPARQLUpdateQuery{
 					body:  string(b[start+1 : s.Position.Offset]),
-					graph: NewGraph(sparql.baseURI),
+					graph: *NewGraph(sparql.baseURI),
 					verb:  verb,
 				}
-				query.graph.Parse(strings.NewReader(query.body), "text/turtle")
+				sparql.parser.Parse(&query.graph, strings.NewReader(query.body), "text/turtle")
 				sparql.queries = append(sparql.queries, query)
 			}
 
@@ -90,7 +94,7 @@ func (g *Graph) SPARQLUpdate(sparql *SPARQLUpdate) (int, error) {
 				found := false
 				for _, triple := range g.All(pattern.Subject, pattern.Predicate, nil) {
 					switch triple.Object.(type) {
-					case *BlankNode:
+					case *domain.BlankNode:
 						return 500, errors.New("bnodes are not supported!")
 					default:
 						if pattern.Object.Equal(triple.Object) {

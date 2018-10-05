@@ -1,10 +1,10 @@
-package encoders_test
+package encoder_test
 
 import (
 	"strings"
 	"testing"
 
-	"github.com/err0r500/go-solid-server/encoders"
+	"github.com/err0r500/go-solid-server/encoder"
 
 	"github.com/err0r500/go-solid-server/domain"
 	jsonld "github.com/linkeddata/gojsonld"
@@ -12,7 +12,7 @@ import (
 )
 
 func TestJSONTerm2Term(t *testing.T) {
-	h := encoders.JSONLDEncoder{}
+	h := encoder.JSONLDEncoder{}
 	term := jsonld.NewResource("http://test.org/")
 	res1 := h.ToDomain(term)
 	res2 := domain.NewResource("http://test.org/")
@@ -27,7 +27,7 @@ func TestJSONTerm2Term(t *testing.T) {
 func TestParseJSONLD(t *testing.T) {
 	r := strings.NewReader(`{ "@id": "http://greggkellogg.net/foaf#me", "http://xmlns.com/foaf/0.1/name": "Gregg Kellogg" }`)
 	g := domain.NewGraph("https://test.org/")
-	encoders.NewMainSerializer().Parse(g, r, "application/ld+json")
+	encoder.New().Parse(g, r, "application/ld+json")
 	assert.Equal(t, 1, g.Len())
 }
 
@@ -35,7 +35,7 @@ func TestSerializeJSONLD(t *testing.T) {
 	g := domain.NewGraph("https://test.org/")
 	g.AddTriple(domain.NewResource("a"), domain.NewResource("b"), domain.NewResource("c"))
 	assert.Equal(t, 1, g.Len())
-	h := encoders.NewMainSerializer()
+	h := encoder.New()
 	toJSON, _ := h.Serialize(g, "application/ld+json")
 	assert.Equal(t, `[{"@id":"a","b":[{"@id":"c"}]}]`, toJSON)
 }

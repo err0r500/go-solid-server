@@ -1,4 +1,4 @@
-package encoders
+package encoder
 
 import (
 	"io"
@@ -14,7 +14,7 @@ type Facade struct {
 	rdfEncoder    RdfEncoder
 }
 
-func NewMainSerializer() uc.Encoder {
+func New() uc.Encoder {
 	return Facade{
 		jsonldEncoder: JSONLDEncoder{},
 		rdfEncoder:    RdfEncoder{},

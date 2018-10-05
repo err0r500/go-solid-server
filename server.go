@@ -17,7 +17,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/err0r500/go-solid-server/encoders"
+	"github.com/err0r500/go-solid-server/encoder"
 	"github.com/err0r500/go-solid-server/httpCaller"
 
 	"github.com/err0r500/go-solid-server/domain"
@@ -86,7 +86,7 @@ type Server struct {
 	uriManipulator uc.URIManipulator
 	fileHandler    uc.FilesHandler
 	parser         uc.Encoder
-	rdfHandler     encoders.RdfEncoder // fixme : remove this one
+	rdfHandler     encoder.RdfEncoder // fixme : remove this one
 }
 
 type httpRequest struct {
@@ -99,7 +99,7 @@ type httpRequest struct {
 	uriManipulator uc.URIManipulator
 	wac            WAC
 	httpCaller     uc.HttpCaller
-	rdfHandler     encoders.RdfEncoder
+	rdfHandler     encoder.RdfEncoder
 }
 
 func (req httpRequest) BaseURI() string {
@@ -249,7 +249,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		s.uriManipulator,
 		WAC{},
 		httpCaller.New(),
-		encoders.RdfEncoder{}}) // fixme : maybe not a good idea to build a new struct on each request
+		encoder.RdfEncoder{}}) // fixme : maybe not a good idea to build a new struct on each request
 
 	for key := range r.headers {
 		w.Header().Set(key, r.headers.Get(key))

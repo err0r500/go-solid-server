@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/err0r500/go-solid-server/encoders"
+	"github.com/err0r500/go-solid-server/encoder"
 
 	gold "github.com/err0r500/go-solid-server"
 	"github.com/err0r500/go-solid-server/domain"
@@ -18,7 +18,7 @@ func TestGraphPatch(t *testing.T) {
 		graph = domain.NewGraph("https://test/")
 	)
 
-	h := encoders.NewMainSerializer()
+	h := encoder.New()
 
 	s := gold.Server{}
 	s.JSONPatch(graph, strings.NewReader(`{"a":{"b":[{"type":"uri","value":"c"}]}}`))

@@ -8,7 +8,7 @@ import (
 	"strings"
 	"text/scanner"
 
-	"github.com/err0r500/go-solid-server/encoders"
+	"github.com/err0r500/go-solid-server/encoder"
 
 	"github.com/err0r500/go-solid-server/domain"
 	"github.com/err0r500/go-solid-server/uc"
@@ -34,7 +34,7 @@ func NewSPARQLUpdate(baseURI string) *SPARQLUpdate {
 	return &SPARQLUpdate{
 		baseURI: baseURI,
 		queries: []SPARQLUpdateQuery{},
-		parser:  encoders.NewMainSerializer(),
+		parser:  encoder.New(),
 	}
 }
 

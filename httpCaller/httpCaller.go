@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/err0r500/go-solid-server/encoders"
+	"github.com/err0r500/go-solid-server/encoder"
 
 	"github.com/err0r500/go-solid-server/uc"
 
@@ -20,7 +20,7 @@ type origHttpCaller struct {
 func New() uc.HttpCaller {
 	return origHttpCaller{
 		uriManipulator: domain.URIHandler{},
-		encoder:        encoders.Facade{},
+		encoder:        encoder.Facade{},
 	}
 }
 

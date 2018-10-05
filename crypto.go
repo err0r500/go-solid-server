@@ -10,17 +10,9 @@ import (
 	"fmt"
 	"math/big"
 	"strconv"
+
+	"github.com/err0r500/go-solid-server/uc"
 )
-
-// Signer creates signatures that verify against a public key.
-type Signer interface {
-	Sign(data []byte) ([]byte, error)
-}
-
-// Verifier verifies signatures against a public key.
-type Verifier interface {
-	Verify(data []byte, sig []byte) error
-}
 
 type rsaPubKey struct {
 	*rsa.PublicKey
@@ -31,7 +23,7 @@ type rsaPrivKey struct {
 }
 
 // ParseRSAPublicKeyNE parses a modulus and exponent and returns a new verifier object
-func ParseRSAPublicKeyNE(keyT, keyN, keyE string) (Verifier, error) {
+func ParseRSAPublicKeyNE(keyT, keyN, keyE string) (uc.Verifier, error) {
 	if len(keyN) == 0 && len(keyE) == 0 {
 		return nil, errors.New("No modulus and/or exponent provided")
 	}
@@ -57,17 +49,17 @@ func ParseRSAPublicKeyNE(keyT, keyN, keyE string) (Verifier, error) {
 }
 
 // ParseRSAPublicKey parses an RSA public key and returns a new verifier object
-func ParseRSAPublicKey(key *rsa.PublicKey) (Verifier, error) {
+func ParseRSAPublicKey(key *rsa.PublicKey) (uc.Verifier, error) {
 	return newVerifierFromKey(key)
 }
 
 // ParseRSAPrivateKey parses an RSA private key and returns a new signer object
-func ParseRSAPrivateKey(key *rsa.PrivateKey) (Signer, error) {
+func ParseRSAPrivateKey(key *rsa.PrivateKey) (uc.Signer, error) {
 	return newSignerFromKey(key)
 }
 
 // ParseRSAPublicPEMKey parses a PEM encoded private key and returns a new verifier object
-func ParseRSAPublicPEMKey(pemBytes []byte) (Verifier, error) {
+func ParseRSAPublicPEMKey(pemBytes []byte) (uc.Verifier, error) {
 	block, _ := pem.Decode(pemBytes)
 	if block == nil {
 		return nil, errors.New("No key found")
@@ -89,7 +81,7 @@ func ParseRSAPublicPEMKey(pemBytes []byte) (Verifier, error) {
 }
 
 // ParseRSAPrivatePEMKey parses a PEM encoded private key and returns a Signer.
-func ParseRSAPrivatePEMKey(pemBytes []byte) (Signer, error) {
+func ParseRSAPrivatePEMKey(pemBytes []byte) (uc.Signer, error) {
 	block, _ := pem.Decode(pemBytes)
 	if block == nil {
 		return nil, errors.New("No key found or could not decode PEM key")
@@ -109,8 +101,8 @@ func ParseRSAPrivatePEMKey(pemBytes []byte) (Signer, error) {
 	return newSignerFromKey(rawkey)
 }
 
-func newSignerFromKey(k interface{}) (Signer, error) {
-	var sKey Signer
+func newSignerFromKey(k interface{}) (uc.Signer, error) {
+	var sKey uc.Signer
 	switch t := k.(type) {
 	case *rsa.PrivateKey:
 		sKey = &rsaPrivKey{t}
@@ -120,8 +112,8 @@ func newSignerFromKey(k interface{}) (Signer, error) {
 	return sKey, nil
 }
 
-func newVerifierFromKey(k interface{}) (Verifier, error) {
-	var vKey Verifier
+func newVerifierFromKey(k interface{}) (uc.Verifier, error) {
+	var vKey uc.Verifier
 	switch t := k.(type) {
 	case *rsa.PublicKey:
 		vKey = &rsaPubKey{t}

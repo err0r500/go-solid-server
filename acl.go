@@ -18,10 +18,10 @@ type WAC struct {
 	w              http.ResponseWriter
 	user           string
 	key            string
-	fileHandler    FilesHandler
+	fileHandler    uc.FilesHandler
 	parser         uc.Encoder
-	uriManipulator domain.URIManipulator
-	httpCaller     HttpCaller
+	uriManipulator uc.URIManipulator
+	httpCaller     uc.HttpCaller
 }
 
 // NewWAC creates a new WAC object

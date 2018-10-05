@@ -2,13 +2,6 @@ package domain
 
 import "strings"
 
-type URIManipulator interface {
-	Brack(s string) string
-	Debrack(s string) string
-	Defrag(s string) string
-	Unquote(s string) string
-}
-
 type URIHandler struct{}
 
 func (URIHandler) Brack(s string) string {

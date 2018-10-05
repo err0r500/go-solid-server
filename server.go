@@ -3,7 +3,6 @@ package gold
 import (
 	"bufio"
 	"bytes"
-	"crypto/tls"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -19,6 +18,7 @@ import (
 	"strings"
 
 	"github.com/err0r500/go-solid-server/encoders"
+	"github.com/err0r500/go-solid-server/httpCaller"
 
 	"github.com/err0r500/go-solid-server/domain"
 	"github.com/err0r500/go-solid-server/mime"
@@ -83,8 +83,8 @@ type Server struct {
 
 	templater      uc.Templater
 	mailer         uc.Mailer
-	uriManipulator domain.URIManipulator
-	fileHandler    FilesHandler
+	uriManipulator uc.URIManipulator
+	fileHandler    uc.FilesHandler
 	parser         uc.Encoder
 	rdfHandler     encoders.RdfEncoder // fixme : remove this one
 }
@@ -96,21 +96,11 @@ type httpRequest struct {
 	ContentType    string
 	User           string
 	IsOwner        bool
-	uriManipulator domain.URIManipulator
+	uriManipulator uc.URIManipulator
 	wac            WAC
-	httpCaller     HttpCaller
+	httpCaller     uc.HttpCaller
 	rdfHandler     encoders.RdfEncoder
 }
-
-var (
-	httpClient = &http.Client{
-		Transport: &http.Transport{
-			TLSClientConfig: &tls.Config{
-				InsecureSkipVerify: true,
-			},
-		},
-	}
-)
 
 func (req httpRequest) BaseURI() string {
 	scheme := "http"
@@ -249,7 +239,18 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	defer func() {
 		req.Body.Close()
 	}()
-	r := s.handle(w, &httpRequest{req, s, "", "", "", false, s.uriManipulator, WAC{}, OrigHttpCaller{}, encoders.RdfEncoder{}}) // fixme : maybe not a good idea to build a new struct on each
+	r := s.handle(w, &httpRequest{
+		req,
+		s,
+		"",
+		"",
+		"",
+		false,
+		s.uriManipulator,
+		WAC{},
+		httpCaller.New(),
+		encoders.RdfEncoder{}}) // fixme : maybe not a good idea to build a new struct on each request
+
 	for key := range r.headers {
 		w.Header().Set(key, r.headers.Get(key))
 	}

@@ -9,12 +9,6 @@ import (
 	"github.com/err0r500/go-solid-server/domain"
 )
 
-type FilesHandler interface {
-	WriteFile(g *domain.Graph, file *os.File, mime string) error
-	AppendFile(g *domain.Graph, filename string, baseURI string)
-	ReadFile(g *domain.Graph, parser uc.Encoder, filename string)
-}
-
 type OrigFilesHandler struct {
 	rdfHandler uc.Encoder
 }

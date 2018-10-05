@@ -74,7 +74,7 @@ func (e *errorString) Error() string {
 type Server struct {
 	http.Handler
 
-	Config     *ServerConfig
+	Config     *domain.ServerConfig
 	cookie     *securecookie.SecureCookie
 	cookieSalt []byte
 	debug      *log.Logger
@@ -87,6 +87,7 @@ type Server struct {
 	fileHandler    uc.FilesHandler
 	parser         uc.Encoder
 	rdfHandler     encoder.RdfEncoder // fixme : remove this one
+	pathInformer   uc.PathInformer
 }
 
 type httpRequest struct {
@@ -179,7 +180,7 @@ func (s Server) handleStatusText(status int, err error) string {
 }
 
 // NewServer is used to create a new Server instance
-func NewServer(config *ServerConfig) *Server {
+func NewServer(config *domain.ServerConfig) *Server {
 	s := &Server{
 		Config:     config,
 		cookie:     securecookie.New(securecookie.GenerateRandomKey(32), securecookie.GenerateRandomKey(32)),
@@ -356,7 +357,7 @@ func (s *Server) handle(w http.ResponseWriter, req *httpRequest) (r *response) {
 
 	// check if is owner
 	req.IsOwner = false
-	resource, _ := req.pathInfo(req.BaseURI())
+	resource, _ := acl.pathInformer.GetPathInfo(req.BaseURI())
 	if len(user) > 0 {
 		aclStatus, err := acl.AllowWrite(resource.Base)
 		if aclStatus == 200 && err == nil {
@@ -478,7 +479,7 @@ func (s *Server) handle(w http.ResponseWriter, req *httpRequest) (r *response) {
 			} else {
 				path += "/"
 			}
-			resource, err = req.pathInfo(resource.Base + "/" + path)
+			resource, err = acl.pathInformer.GetPathInfo(resource.Base + "/" + path)
 			if err != nil {
 				return r.respond(500, err)
 			}
@@ -547,7 +548,7 @@ func (s *Server) handle(w http.ResponseWriter, req *httpRequest) (r *response) {
 					_, xerr := os.Stat(resource.File + dirIndex)
 					status = 200
 					if xerr == nil {
-						resource, err = req.pathInfo(resource.Base + "/" + resource.Path + dirIndex)
+						resource, err = acl.pathInformer.GetPathInfo(resource.Base + "/" + resource.Path + dirIndex)
 						if err != nil {
 							return r.respond(500, err)
 						}
@@ -591,7 +592,7 @@ func (s *Server) handle(w http.ResponseWriter, req *httpRequest) (r *response) {
 					matches, err := filepath.Glob(globPath)
 					if err == nil {
 						for _, file := range matches {
-							res, err := req.pathInfo(resource.Base + "/" + filepath.Dir(resource.Path) + "/" + filepath.Base(file))
+							res, err := acl.pathInformer.GetPathInfo(resource.Base + "/" + filepath.Dir(resource.Path) + "/" + filepath.Base(file))
 							if !res.IsDir && res.Exists && err == nil {
 								aclStatus, err = acl.AllowRead(res.URI)
 								if aclStatus == 200 && err == nil {
@@ -637,7 +638,7 @@ func (s *Server) handle(w http.ResponseWriter, req *httpRequest) (r *response) {
 								if info.IsDir() {
 									res += "/"
 								}
-								f, err := req.pathInfo(res)
+								f, err := acl.pathInformer.GetPathInfo(res)
 								if err != nil {
 									r.respond(500, err)
 								}
@@ -956,7 +957,7 @@ func (s *Server) handle(w http.ResponseWriter, req *httpRequest) (r *response) {
 				if !strings.HasSuffix(resource.Path, "/") {
 					resource.Path += "/"
 				}
-				resource, err = req.pathInfo(resource.Base + "/" + resource.Path)
+				resource, err = acl.pathInformer.GetPathInfo(resource.Base + "/" + resource.Path)
 				if err != nil {
 					s.debug.Println("POST LDPC req.pathInfo err: " + err.Error())
 					return r.respond(500, err)
@@ -995,7 +996,7 @@ func (s *Server) handle(w http.ResponseWriter, req *httpRequest) (r *response) {
 				return r.respond(201)
 			}
 
-			resource, err = req.pathInfo(resource.Base + "/" + resource.Path)
+			resource, err = acl.pathInformer.GetPathInfo(resource.Base + "/" + resource.Path)
 			if err != nil {
 				s.debug.Println("POST LDPR req.pathInfo err: " + err.Error())
 				return r.respond(500, err)
@@ -1157,7 +1158,7 @@ func (s *Server) handle(w http.ResponseWriter, req *httpRequest) (r *response) {
 				return r.respond(500, err)
 			}
 			// refresh resource and set the right headers
-			resource, err = req.pathInfo(resource.URI)
+			resource, err = acl.pathInformer.GetPathInfo(resource.URI)
 			w.Header().Set("Link", s.uriManipulator.Brack(resource.MetaURI)+"; rel=\"meta\", "+s.uriManipulator.Brack(resource.AclURI)+"; rel=\"acl\"")
 			// LDP header
 			w.Header().Add("Link", s.uriManipulator.Brack("http://www.w3.org/ns/ldp#Resource")+"; rel=\"type\"")

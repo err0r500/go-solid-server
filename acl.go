@@ -22,6 +22,7 @@ type WAC struct {
 	parser         uc.Encoder
 	uriManipulator uc.URIManipulator
 	httpCaller     uc.HttpCaller
+	pathInformer   uc.PathInformer
 }
 
 // NewWAC creates a new WAC object
@@ -33,14 +34,14 @@ func NewWAC(req *httpRequest, srv *Server, w http.ResponseWriter, user string, k
 func (acl *WAC) allow(mode string, path string) (int, error) {
 	origin := acl.req.Header.Get("Origin")
 	accessType := "accessTo"
-	p, err := acl.req.pathInfo(path)
+	p, err := acl.pathInformer.GetPathInfo(path)
 	if err != nil {
 		return 500, err
 	}
 	depth := strings.Split(p.Path, "/")
 
 	for d := len(depth); d >= 0; d-- {
-		p, err := acl.req.pathInfo(path)
+		p, err := acl.pathInformer.GetPathInfo(path)
 		if err != nil {
 			return 500, err
 		}

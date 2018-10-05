@@ -12,7 +12,7 @@ import (
 	"strings"
 
 	gold "github.com/err0r500/go-solid-server"
-	"github.com/err0r500/go-solid-server/mail"
+	"github.com/err0r500/go-solid-server/domain"
 )
 
 var (
@@ -104,7 +104,7 @@ func main() {
 	config := gold.NewServerConfig()
 	confLoaded := false
 	if len(*conf) > 0 {
-		err = config.LoadJSONFile(*conf)
+		config, err = gold.ConfigLoader{}.LoadJSONFile(*conf)
 		if err == nil {
 			confLoaded = true
 		} else {
@@ -135,7 +135,7 @@ func main() {
 		if len(*emailName) > 0 && len(*emailAddr) > 0 && len(*emailUser) > 0 &&
 			len(*emailPass) > 0 && len(*emailServ) > 0 && len(*emailPort) > 0 {
 			ep, _ := strconv.Atoi(*emailPort)
-			config.SMTPConfig = mail.EmailConfig{
+			config.SMTPConfig = domain.EmailConfig{
 				Name:     *emailName,
 				Addr:     *emailAddr,
 				User:     *emailUser,

@@ -1,4 +1,4 @@
-package gold
+package pathInfo
 
 //
 //import (
@@ -10,7 +10,7 @@ package gold
 //func TestPathInfoWithoutTrailingSlash(t *testing.T) {
 //	sroot := serverDefaultRoot()
 //	req := &httpRequest{nil, handler, "", "", "", false}
-//	p, err := req.pathInfo(testServer.URL)
+//	p, err := req.PathInfo(testServer.URL)
 //	assert.Nil(t, err)
 //	assert.Equal(t, testServer.URL+"/", p.URI)
 //	assert.Equal(t, testServer.URL, p.Base)
@@ -28,7 +28,7 @@ package gold
 //	sroot := serverDefaultRoot()
 //	req := &httpRequest{nil, handler, "", "", "", false}
 //
-//	p, err := req.pathInfo(testServer.URL + "/")
+//	p, err := req.PathInfo(testServer.URL + "/")
 //	assert.Nil(t, err)
 //	assert.Equal(t, testServer.URL, p.Base)
 //	assert.Equal(t, testServer.URL+"/", p.URI)
@@ -47,7 +47,7 @@ package gold
 //	sroot := serverDefaultRoot()
 //	req := &httpRequest{nil, handler, "", "", "", false}
 //
-//	p, err := req.pathInfo(path)
+//	p, err := req.PathInfo(path)
 //	assert.Nil(t, err)
 //	assert.Equal(t, path, p.URI)
 //	assert.Equal(t, testServer.URL, p.Base)
@@ -66,7 +66,7 @@ package gold
 //	sroot := serverDefaultRoot()
 //	req := &httpRequest{nil, handler, "", "", "", false}
 //
-//	p, err := req.pathInfo(path + "dir/")
+//	p, err := req.PathInfo(path + "dir/")
 //	assert.Nil(t, err)
 //	assert.Equal(t, path+"dir/", p.URI)
 //	assert.Equal(t, testServer.URL, p.Base)
@@ -86,7 +86,7 @@ package gold
 //	sroot := serverDefaultRoot()
 //	req := &httpRequest{nil, handler, "", "", "", false}
 //
-//	p, err := req.pathInfo(path + "abc")
+//	p, err := req.PathInfo(path + "abc")
 //	assert.Nil(t, err)
 //	assert.Equal(t, path+"abc", p.URI)
 //	assert.Equal(t, testServer.URL, p.Base)
@@ -106,7 +106,7 @@ package gold
 //	sroot := serverDefaultRoot()
 //	req := &httpRequest{nil, handler, "", "", "", false}
 //
-//	p, err := req.pathInfo(path + config.ACLSuffix)
+//	p, err := req.PathInfo(path + config.ACLSuffix)
 //	assert.Nil(t, err)
 //	assert.Equal(t, path+config.ACLSuffix, p.URI)
 //	assert.Equal(t, testServer.URL, p.Base)
@@ -125,7 +125,7 @@ package gold
 //	sroot := serverDefaultRoot()
 //	req := &httpRequest{nil, handler, "", "", "", false}
 //
-//	p, err := req.pathInfo(path + config.MetaSuffix)
+//	p, err := req.PathInfo(path + config.MetaSuffix)
 //	assert.Nil(t, err)
 //	assert.Equal(t, path+config.MetaSuffix, p.URI)
 //	assert.Equal(t, testServer.URL, p.Base)

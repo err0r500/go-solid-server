@@ -324,7 +324,7 @@ func (req *httpRequest) AddCertKeys(uri string, mod string, exp string) error {
 	userTerm := domain.NewResource(uri)
 	keyTerm := domain.NewResource(profileURI + "#key" + uuid)
 
-	resource, _ := req.pathInfo(profileURI)
+	resource, _ := req.Server.pathInformer.GetPathInfo(profileURI)
 
 	g := domain.NewGraph(profileURI)
 	req.fileHandler.ReadFile(g, req.parser, resource.File)
@@ -392,7 +392,7 @@ func NewWebIDProfile(account webidAccount) *domain.Graph {
 
 // LinkToWebID links the account URI (root container) to the WebID that owns the space
 func (req *httpRequest) LinkToWebID(account webidAccount) error {
-	resource, _ := req.pathInfo(account.BaseURI + "/")
+	resource, _ := req.Server.pathInformer.GetPathInfo(account.BaseURI + "/")
 
 	g := domain.NewGraph(resource.URI)
 	g.AddTriple(domain.NewResource(account.WebID), domain.NewNS("st").Get("account"), domain.NewResource(resource.URI))
@@ -414,9 +414,9 @@ func (req *httpRequest) LinkToWebID(account webidAccount) error {
 }
 
 func (req *httpRequest) getAccountWebID() string {
-	resource, err := req.pathInfo(req.BaseURI())
+	resource, err := req.Server.pathInformer.GetPathInfo(req.BaseURI())
 	if err == nil {
-		resource, _ = req.pathInfo(resource.Base)
+		resource, _ = req.Server.pathInformer.GetPathInfo(resource.Base)
 		g := domain.NewGraph(resource.MetaURI)
 		req.fileHandler.ReadFile(g, req.parser, resource.MetaFile)
 		if g.Len() >= 1 {
@@ -441,7 +441,7 @@ func (req *httpRequest) AddWorkspaces(account webidAccount, g *domain.Graph) err
 	pref.AddTriple(domain.NewResource(account.WebID), domain.NewNS("rdf").Get("type"), domain.NewNS("foaf").Get("Person"))
 
 	for _, ws := range workspaces {
-		resource, _ := req.pathInfo(account.BaseURI + "/" + ws.Name + "/")
+		resource, _ := req.Server.pathInformer.GetPathInfo(account.BaseURI + "/" + ws.Name + "/")
 		err := os.MkdirAll(resource.File, 0755)
 		if err != nil {
 			return err
@@ -504,7 +504,7 @@ func (req *httpRequest) AddWorkspaces(account webidAccount, g *domain.Graph) err
 		//}
 	}
 
-	resource, _ := req.pathInfo(account.PrefURI)
+	resource, _ := req.Server.pathInformer.GetPathInfo(account.PrefURI)
 	err := os.MkdirAll(_path.Dir(resource.File), 0755)
 	if err != nil {
 		return err
@@ -534,7 +534,7 @@ func createTypeIndex(req *httpRequest, indexType, url string) error {
 	typeIndex.AddTriple(domain.NewResource(url), domain.NewNS("rdf").Get("type"), domain.NewNS("st").Get("TypeIndex"))
 	typeIndex.AddTriple(domain.NewResource(url), domain.NewNS("rdf").Get("type"), domain.NewNS("st").Get(indexType))
 
-	resource, _ := req.pathInfo(url)
+	resource, _ := req.Server.pathInformer.GetPathInfo(url)
 	err := os.MkdirAll(_path.Dir(resource.File), 0755)
 	if err != nil {
 		return err

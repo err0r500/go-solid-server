@@ -62,7 +62,7 @@ func HandleSystem(w http.ResponseWriter, req *httpRequest, s *Server) SystemRetu
 	} else if strings.HasSuffix(req.Request.URL.Path, "cert") {
 		return newCert(w, req, s)
 	} else if strings.HasSuffix(req.Request.URL.Path, "login") {
-		return logIn(w, req, s)
+		return s.logIn(w, req)
 	} else if strings.HasSuffix(req.Request.URL.Path, "logout") {
 		return logOut(w, req, s)
 	} else if strings.HasSuffix(req.Request.URL.Path, "tokens") {
@@ -78,7 +78,7 @@ func logOut(w http.ResponseWriter, req *httpRequest, s *Server) SystemReturn {
 	return SystemReturn{Status: 200, Body: "You have been signed out!"}
 }
 
-func logIn(w http.ResponseWriter, req *httpRequest, s *Server) SystemReturn {
+func (s *Server) logIn(w http.ResponseWriter, req *httpRequest) SystemReturn {
 	var passL string
 	redirTo := req.FormValue("redirect")
 	origin := req.FormValue("origin")
@@ -116,13 +116,13 @@ func logIn(w http.ResponseWriter, req *httpRequest, s *Server) SystemReturn {
 	if len(webid) == 0 && len(passF) == 0 {
 		return SystemReturn{Status: 409, Body: "You must supply a valid WebID and password."}
 	}
-	resource, err := req.pathInfo(req.BaseURI())
+	resource, err := s.pathInformer.GetPathInfo(req.BaseURI())
 	if err != nil {
 		s.debug.Println("PathInfo error: " + err.Error())
 		return SystemReturn{Status: 500, Body: err.Error()}
 	}
 	// try to fetch hashed password from root ,acl
-	resource, _ = req.pathInfo(resource.Base)
+	resource, _ = s.pathInformer.GetPathInfo(resource.Base)
 	kb := domain.NewGraph(resource.AclURI)
 	s.fileHandler.ReadFile(kb, s.parser, resource.AclFile)
 	s.debug.Println("Looking for password in", resource.AclFile)
@@ -210,13 +210,13 @@ func sendRecoveryToken(w http.ResponseWriter, req *httpRequest, s *Server) Syste
 	webid := req.FormValue("webid")
 	// exit if not a local WebID
 	// log.Println("Host:" + req.Header.Get("Host"))
-	resource, err := req.pathInfo(req.BaseURI())
+	resource, err := s.pathInformer.GetPathInfo(req.BaseURI())
 	if err != nil {
 		s.debug.Println("PathInfo error: " + err.Error())
 		return SystemReturn{Status: 500, Body: err.Error()}
 	}
 	// try to fetch recovery email from root ,acl
-	resource, _ = req.pathInfo(resource.Base)
+	resource, _ = s.pathInformer.GetPathInfo(resource.Base)
 	email := ""
 	kb := domain.NewGraph(resource.AclURI)
 	s.fileHandler.ReadFile(kb, s.parser, resource.AclFile)
@@ -295,9 +295,9 @@ func validateRecoveryToken(w http.ResponseWriter, req *httpRequest, s *Server) S
 			return SystemReturn{Status: 200, Body: s.templater.NewPassTemplate(token, "Passwords do not match!")}
 		}
 		// save new password
-		resource, _ := req.pathInfo(req.BaseURI())
+		resource, _ := s.pathInformer.GetPathInfo(req.BaseURI())
 		accountBase := resource.Base + "/"
-		resource, _ = req.pathInfo(accountBase)
+		resource, _ = s.pathInformer.GetPathInfo(accountBase)
 
 		g := domain.NewGraph(resource.AclURI)
 		s.fileHandler.ReadFile(g, s.parser, resource.AclFile)
@@ -337,7 +337,7 @@ func validateRecoveryToken(w http.ResponseWriter, req *httpRequest, s *Server) S
 }
 
 func newAccount(w http.ResponseWriter, req *httpRequest, s *Server) SystemReturn {
-	resource, _ := req.pathInfo(req.BaseURI())
+	resource, _ := s.pathInformer.GetPathInfo(req.BaseURI())
 	host, port, _ := net.SplitHostPort(req.Host)
 	if len(host) == 0 {
 		host = req.Host
@@ -358,7 +358,7 @@ func newAccount(w http.ResponseWriter, req *httpRequest, s *Server) SystemReturn
 
 	webidURL := accountBase + "profile/card"
 	webidURI := webidURL + "#me"
-	resource, _ = req.pathInfo(accountBase)
+	resource, _ = s.pathInformer.GetPathInfo(accountBase)
 
 	account := webidAccount{
 		Root:          resource.Root,
@@ -390,7 +390,7 @@ func newAccount(w http.ResponseWriter, req *httpRequest, s *Server) SystemReturn
 		return SystemReturn{Status: 406, Body: "An account with the same name already exists."}
 	}
 
-	resource, _ = req.pathInfo(webidURL)
+	resource, _ = s.pathInformer.GetPathInfo(webidURL)
 
 	// create account space
 	err = os.MkdirAll(_path.Dir(resource.File), 0755)
@@ -463,7 +463,7 @@ func newAccount(w http.ResponseWriter, req *httpRequest, s *Server) SystemReturn
 
 	// Write default ACL for the whole account space
 	// No one but the user is allowed access by default
-	resource, _ = req.pathInfo(accountBase)
+	resource, _ = s.pathInformer.GetPathInfo(accountBase)
 	aclTerm = domain.NewResource(resource.AclURI + "#owner")
 	g = domain.NewGraph(resource.AclURI)
 	g.AddTriple(aclTerm, domain.NewNS("rdf").Get("type"), domain.NewNS("acl").Get("Authorization"))
@@ -555,7 +555,7 @@ func newAccount(w http.ResponseWriter, req *httpRequest, s *Server) SystemReturn
 }
 
 func newCert(w http.ResponseWriter, req *httpRequest, s *Server) SystemReturn {
-	resource, _ := req.pathInfo(req.BaseURI())
+	resource, _ := s.pathInformer.GetPathInfo(req.BaseURI())
 
 	name := req.FormValue("name")
 	webidURI := req.FormValue("webid")
@@ -630,7 +630,7 @@ func newCert(w http.ResponseWriter, req *httpRequest, s *Server) SystemReturn {
 // }
 // @@TODO treat exceptions
 func accountStatus(w http.ResponseWriter, req *httpRequest, s *Server) SystemReturn {
-	resource, _ := req.pathInfo(req.BaseURI())
+	resource, _ := s.pathInformer.GetPathInfo(req.BaseURI())
 	host, port, _ := net.SplitHostPort(req.Host)
 	if len(host) == 0 {
 		host = req.Host
@@ -664,7 +664,7 @@ func accountStatus(w http.ResponseWriter, req *httpRequest, s *Server) SystemRet
 		accURL = resource.Obj.Scheme + "://" + accName + "." + host + port + "/"
 	}
 	isAvailable := true
-	resource, _ = req.pathInfo(accURL)
+	resource, _ = s.pathInformer.GetPathInfo(accURL)
 
 	s.debug.Println("Checking if account <" + accReq.AccountName + "> exists...")
 	stat, err := os.Stat(resource.File)

@@ -59,3 +59,7 @@ type URIManipulator interface {
 	Defrag(s string) string
 	Unquote(s string) string
 }
+
+type PathInformer interface {
+	GetPathInfo(path string) (*domain.PathInfo, error)
+}

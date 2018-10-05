@@ -8,15 +8,16 @@ import (
 	"net/smtp"
 	"strconv"
 
+	"github.com/err0r500/go-solid-server/domain"
 	"github.com/err0r500/go-solid-server/uc"
 )
 
-func New(config EmailConfig) uc.Mailer {
+func New(config domain.EmailConfig) uc.Mailer {
 	return smtpMailer{config}
 }
 
 type smtpMailer struct {
-	config EmailConfig
+	config domain.EmailConfig
 }
 
 type emailStruct struct {
@@ -26,26 +27,6 @@ type emailStruct struct {
 	FromName string
 	Subject  string
 	Body     string
-}
-
-// EmailConfig holds configuration values for remote SMTP servers
-type EmailConfig struct {
-	// Name of the remote SMTP server account, i.e. Server admin
-	Name string
-	// Addr is the remote SMTP server email address, i.e. admin@server.org
-	Addr string
-	// User is the remote SMTP server username, i.e. admin
-	User string
-	// Pass is the remote SMTP server password
-	Pass string
-	// Host is the remote SMTP server IP address or domain
-	Host string
-	// Port is the remote SMTP server port number
-	Port int
-	// ForceSSL forces SSL/TLS connection instead of StartTLS
-	ForceSSL bool
-	// Insecure allows connections to insecure remote SMTP servers (self-signed certs)
-	Insecure bool
 }
 
 func NewEmailStruct() *emailStruct {

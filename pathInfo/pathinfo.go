@@ -1,41 +1,32 @@
-package gold
+package pathInfo
 
 import (
 	"errors"
+	"fmt"
 	"net"
 	"net/url"
 	"os"
 	_path "path"
 	"path/filepath"
 	"strings"
-	"time"
 
+	"github.com/err0r500/go-solid-server/domain"
 	"github.com/err0r500/go-solid-server/mime"
+	"github.com/err0r500/go-solid-server/uc"
 )
 
-type pathInfo struct {
-	Obj       *url.URL
-	URI       string
-	Base      string
-	Path      string
-	Root      string
-	File      string
-	FileType  string
-	ParentURI string
-	AclURI    string
-	AclFile   string
-	MetaURI   string
-	MetaFile  string
-	Extension string
-	MaybeRDF  bool
-	IsDir     bool
-	Exists    bool
-	ModTime   time.Time
-	Size      int64
+type pathInfoGetter struct {
+	serverConfig domain.ServerConfig
 }
 
-func (req *httpRequest) pathInfo(path string) (*pathInfo, error) {
-	res := &pathInfo{}
+func New(srvConfig domain.ServerConfig) uc.PathInformer {
+	return pathInfoGetter{
+		serverConfig: srvConfig,
+	}
+}
+
+func (iG pathInfoGetter) GetPathInfo(path string) (*domain.PathInfo, error) {
+	res := &domain.PathInfo{}
 
 	if len(path) == 0 {
 		return nil, errors.New("missing resource path")
@@ -52,7 +43,7 @@ func (req *httpRequest) pathInfo(path string) (*pathInfo, error) {
 	}
 
 	res.Base = p.Scheme + "://" + p.Host
-	res.Root = req.Server.Config.DataRoot
+	res.Root = iG.serverConfig.DataRoot
 	// include host and port if running in vhosts mode
 	host, port, _ := net.SplitHostPort(p.Host)
 	if len(host) == 0 {
@@ -61,8 +52,8 @@ func (req *httpRequest) pathInfo(path string) (*pathInfo, error) {
 	if len(port) > 0 {
 		host += ":" + port
 	}
-	if req.Server.Config.Vhosts {
-		res.Root = req.Server.Config.DataRoot + host + "/"
+	if iG.serverConfig.Vhosts {
+		res.Root = iG.serverConfig.DataRoot + host + "/"
 		res.Base = p.Scheme + "://" + host
 	}
 
@@ -80,10 +71,10 @@ func (req *httpRequest) pathInfo(path string) (*pathInfo, error) {
 	res.File = p.Path
 	res.Path = p.Path
 
-	if req.Server.Config.Vhosts {
+	if iG.serverConfig.Vhosts {
 		res.File = res.Root + p.Path
-	} else if len(req.Server.Config.DataRoot) > 0 {
-		res.File = req.Server.Config.DataRoot + p.Path
+	} else if len(iG.serverConfig.DataRoot) > 0 {
+		res.File = iG.serverConfig.DataRoot + p.Path
 	}
 
 	res.Exists = true
@@ -107,7 +98,8 @@ func (req *httpRequest) pathInfo(path string) (*pathInfo, error) {
 			if len(res.FileType) == 0 {
 				res.FileType, err = mime.GuessMimeType(res.File)
 				if err != nil {
-					req.Server.debug.Println(err)
+					fmt.Println(err)
+					//req.Server.debug.Println(err)
 				}
 			}
 		}
@@ -127,21 +119,21 @@ func (req *httpRequest) pathInfo(path string) (*pathInfo, error) {
 		res.ParentURI = res.Base + "/" + filepath.Dir(res.Path) + "/"
 	}
 
-	if strings.HasSuffix(res.Path, req.Server.Config.ACLSuffix) {
+	if strings.HasSuffix(res.Path, iG.serverConfig.ACLSuffix) {
 		res.AclURI = res.URI
 		res.AclFile = res.File
 		res.MetaURI = res.URI
 		res.MetaFile = res.File
-	} else if strings.HasSuffix(res.Path, req.Server.Config.MetaSuffix) {
-		res.AclURI = res.URI + req.Server.Config.ACLSuffix
-		res.AclFile = res.File + req.Server.Config.ACLSuffix
+	} else if strings.HasSuffix(res.Path, iG.serverConfig.MetaSuffix) {
+		res.AclURI = res.URI + iG.serverConfig.ACLSuffix
+		res.AclFile = res.File + iG.serverConfig.ACLSuffix
 		res.MetaURI = res.URI
 		res.MetaFile = res.File
 	} else {
-		res.AclURI = res.URI + req.Server.Config.ACLSuffix
-		res.AclFile = res.File + req.Server.Config.ACLSuffix
-		res.MetaURI = res.URI + req.Server.Config.MetaSuffix
-		res.MetaFile = res.File + req.Server.Config.MetaSuffix
+		res.AclURI = res.URI + iG.serverConfig.ACLSuffix
+		res.AclFile = res.File + iG.serverConfig.ACLSuffix
+		res.MetaURI = res.URI + iG.serverConfig.MetaSuffix
+		res.MetaFile = res.File + iG.serverConfig.MetaSuffix
 	}
 
 	return res, nil

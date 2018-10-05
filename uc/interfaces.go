@@ -63,3 +63,11 @@ type URIManipulator interface {
 type PathInformer interface {
 	GetPathInfo(path string) (*domain.PathInfo, error)
 }
+
+type ACL interface {
+	AllowRead(path string) (int, error)
+	AllowWrite(path string) (int, error)
+	AllowAppend(path string) (int, error)
+	AllowControl(path string) (int, error)
+	VerifyDelegator(delegator string, delegatee string) bool
+}

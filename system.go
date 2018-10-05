@@ -240,7 +240,7 @@ func sendRecoveryToken(w http.ResponseWriter, req *httpRequest, s *Server) Syste
 	}
 	// set validity for now + 5 mins
 	t := time.Duration(s.Config.TokenAge) * time.Minute
-	token, err := NewSecureToken("Recovery", values, t, s)
+	token, err := s.NewSecureToken("Recovery", values, t)
 	if err != nil {
 		s.debug.Println("Could not generate recovery token for " + webid + ", err: " + err.Error())
 		return SystemReturn{Status: 400, Body: "Could not generate recovery token for " + webid + ", err: " + err.Error()}
@@ -575,8 +575,8 @@ func newCert(w http.ResponseWriter, req *httpRequest, s *Server) SystemReturn {
 		loggedUser := w.Header().Get("User")
 		s.debug.Println("Checking if request is authenticated: " + loggedUser)
 		if len(loggedUser) > 0 && loggedUser == webidURI && strings.HasPrefix(webidURI, resource.Base) {
-			acl := NewWAC(req, s, w, loggedUser, "")
-			aclStatus, err := acl.AllowWrite(strings.Split(webidURI, "#")[0])
+			acl := NewWAC(loggedUser, "")
+			aclStatus, err := acl.AllowWrite(req.Header.Get("Origin"), strings.Split(webidURI, "#")[0])
 			if aclStatus > 200 || err != nil {
 				return SystemReturn{Status: aclStatus, Body: err.Error()}
 			}

@@ -105,7 +105,7 @@ func WebIDDigestAuth(req *httpRequest) (string, error) {
 	}
 
 	// Decrypt and validate nonce from secure token
-	tValues, err := ValidateSecureToken("WWW-Authenticate", authH.Nonce, req.Server)
+	tValues, err := req.Server.ValidateSecureToken("WWW-Authenticate", authH.Nonce)
 	if err != nil {
 		return "", err
 	}

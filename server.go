@@ -53,8 +53,6 @@ var (
 	debugFlags  = log.Flags() | log.Lshortfile
 	debugPrefix = "[debug] "
 
-	// magic *magicmime.Magic
-
 	methodsAll = []string{
 		"OPTIONS", "HEAD", "GET",
 		"PATCH", "POST", "PUT", "MKCOL", "DELETE",
@@ -62,19 +60,11 @@ var (
 	}
 )
 
-type errorString struct {
-	s string
-}
-
-func (e *errorString) Error() string {
-	return e.s
-}
-
 // Server object contains http handler, root where the data is found and whether it uses vhosts or not
 type Server struct {
 	http.Handler
 
-	Config     *domain.ServerConfig
+	Config     domain.ServerConfig
 	cookie     *securecookie.SecureCookie
 	cookieSalt []byte
 	debug      *log.Logger
@@ -180,7 +170,7 @@ func (s Server) handleStatusText(status int, err error) string {
 }
 
 // NewServer is used to create a new Server instance
-func NewServer(config *domain.ServerConfig) *Server {
+func NewServer(config domain.ServerConfig) *Server {
 	s := &Server{
 		Config:     config,
 		cookie:     securecookie.New(securecookie.GenerateRandomKey(32), securecookie.GenerateRandomKey(32)),
@@ -274,57 +264,6 @@ func TwinqlQuery(w http.ResponseWriter, req *httpRequest, s *Server) *response {
 	return r
 }
 
-// Proxy requests
-func (s *Server) ProxyReq(w http.ResponseWriter, req *httpRequest, reqUrl string) error {
-	uri, err := url.Parse(reqUrl)
-	if err != nil {
-		return err
-	}
-	host := uri.Host
-	if !s.Config.ProxyLocal {
-		if strings.HasPrefix(host, "10.") ||
-			strings.HasPrefix(host, "172.16.") ||
-			strings.HasPrefix(host, "192.168.") ||
-			strings.HasPrefix(host, "localhost") {
-			return errors.New("Proxying requests to the local network is not allowed.")
-		}
-	}
-	if len(req.FormValue("key")) > 0 {
-		token, err := decodeQuery(req.FormValue("key"))
-		if err != nil {
-			s.debug.Println(err.Error())
-		}
-		user, err := GetAuthzFromToken(token, req)
-		if err != nil {
-			s.debug.Println(err.Error())
-		} else {
-			s.debug.Println("Authorization valid for user", user)
-		}
-		req.User = user
-	}
-
-	if len(req.Header.Get("Authorization")) > 0 {
-		token, err := ParseBearerAuthorizationHeader(req.Header.Get("Authorization"))
-		if err != nil {
-			s.debug.Println(err.Error())
-		}
-		user, err := GetAuthzFromToken(token, req)
-		if err != nil {
-			s.debug.Println(err.Error())
-		} else {
-			s.debug.Println("Authorization valid for user", user)
-		}
-		req.User = user
-	}
-
-	req.URL = uri
-	req.Host = host
-	req.RequestURI = uri.RequestURI()
-	req.Header.Set("User", req.User)
-	proxy.ServeHTTP(w, req.Request)
-	return nil
-}
-
 func (s *Server) handle(w http.ResponseWriter, req *httpRequest) (r *response) {
 	r = new(response)
 	var err error
@@ -350,16 +289,16 @@ func (s *Server) handle(w http.ResponseWriter, req *httpRequest) (r *response) {
 	rKey := req.Request.FormValue("key")
 
 	// Authentication
-	user := req.authn(w)
+	user := s.authn(req, w)
 	req.User = user
 	w.Header().Set("User", user)
-	acl := NewWAC(req, s, w, user, rKey)
+	acl := NewWAC(user, rKey)
 
 	// check if is owner
 	req.IsOwner = false
-	resource, _ := acl.pathInformer.GetPathInfo(req.BaseURI())
+	resource, _ := s.pathInformer.GetPathInfo(req.BaseURI())
 	if len(user) > 0 {
-		aclStatus, err := acl.AllowWrite(resource.Base)
+		aclStatus, err := acl.AllowWrite(req.Header.Get("Origin"), resource.Base)
 		if aclStatus == 200 && err == nil {
 			req.IsOwner = true
 		}
@@ -386,14 +325,12 @@ func (s *Server) handle(w http.ResponseWriter, req *httpRequest) (r *response) {
 	}
 
 	// Query requests
-	if req.Method == "POST" && QueryPath != "" &&
-		strings.Contains(req.URL.Path, QueryPath) &&
-		len(s.Config.QueryTemplate) > 0 {
+	if req.Method == "POST" && strings.Contains(req.URL.Path, QueryPath) && len(s.Config.QueryTemplate) > 0 {
 		return TwinqlQuery(w, req, s)
 	}
 
-	s.debug.Println(req.RemoteAddr + " requested resource URI: " + req.URL.String())
-	s.debug.Println(req.RemoteAddr + " requested resource Path: " + resource.File)
+	//s.debug.Println(req.RemoteAddr + " requested resource URI: " + req.URL.String())
+	//s.debug.Println(req.RemoteAddr + " requested resource Path: " + resource.File)
 
 	dataMime := req.Header.Get(HCType)
 	dataMime = strings.Split(dataMime, ";")[0]
@@ -479,7 +416,7 @@ func (s *Server) handle(w http.ResponseWriter, req *httpRequest) (r *response) {
 			} else {
 				path += "/"
 			}
-			resource, err = acl.pathInformer.GetPathInfo(resource.Base + "/" + path)
+			resource, err = s.pathInformer.GetPathInfo(resource.Base + "/" + path)
 			if err != nil {
 				return r.respond(500, err)
 			}
@@ -515,7 +452,7 @@ func (s *Server) handle(w http.ResponseWriter, req *httpRequest) (r *response) {
 		w.Header().Add("Link", s.uriManipulator.Brack("http://www.w3.org/ns/ldp#Resource")+"; rel=\"type\"")
 
 		status := 501
-		aclStatus, err := acl.AllowRead(resource.URI)
+		aclStatus, err := acl.AllowRead(req.Header.Get("Origin"), resource.URI)
 		if aclStatus > 200 || err != nil {
 			return r.respond(aclStatus, s.handleStatusText(aclStatus, err))
 		}
@@ -548,7 +485,7 @@ func (s *Server) handle(w http.ResponseWriter, req *httpRequest) (r *response) {
 					_, xerr := os.Stat(resource.File + dirIndex)
 					status = 200
 					if xerr == nil {
-						resource, err = acl.pathInformer.GetPathInfo(resource.Base + "/" + resource.Path + dirIndex)
+						resource, err = s.pathInformer.GetPathInfo(resource.Base + "/" + resource.Path + dirIndex)
 						if err != nil {
 							return r.respond(500, err)
 						}
@@ -592,9 +529,9 @@ func (s *Server) handle(w http.ResponseWriter, req *httpRequest) (r *response) {
 					matches, err := filepath.Glob(globPath)
 					if err == nil {
 						for _, file := range matches {
-							res, err := acl.pathInformer.GetPathInfo(resource.Base + "/" + filepath.Dir(resource.Path) + "/" + filepath.Base(file))
+							res, err := s.pathInformer.GetPathInfo(resource.Base + "/" + filepath.Dir(resource.Path) + "/" + filepath.Base(file))
 							if !res.IsDir && res.Exists && err == nil {
-								aclStatus, err = acl.AllowRead(res.URI)
+								aclStatus, err = acl.AllowRead(req.Header.Get("Origin"), res.URI)
 								if aclStatus == 200 && err == nil {
 									s.fileHandler.AppendFile(g, res.File, res.URI)
 									g.AddTriple(root, domain.NewResource("http://www.w3.org/ns/ldp#contains"), domain.NewResource(res.URI))
@@ -638,7 +575,7 @@ func (s *Server) handle(w http.ResponseWriter, req *httpRequest) (r *response) {
 								if info.IsDir() {
 									res += "/"
 								}
-								f, err := acl.pathInformer.GetPathInfo(res)
+								f, err := s.pathInformer.GetPathInfo(res)
 								if err != nil {
 									r.respond(500, err)
 								}
@@ -823,10 +760,10 @@ func (s *Server) handle(w http.ResponseWriter, req *httpRequest) (r *response) {
 		defer unlock()
 
 		// check append first
-		aclAppend, err := acl.AllowAppend(resource.URI)
+		aclAppend, err := acl.AllowAppend(req.Header.Get("Origin"), resource.URI)
 		if aclAppend > 200 || err != nil {
 			// check if we can write then
-			aclWrite, err := acl.AllowWrite(resource.URI)
+			aclWrite, err := acl.AllowWrite(req.Header.Get("Origin"), resource.URI)
 			if aclWrite > 200 || err != nil {
 				return r.respond(aclWrite, s.handleStatusText(aclWrite, err))
 			}
@@ -904,10 +841,10 @@ func (s *Server) handle(w http.ResponseWriter, req *httpRequest) (r *response) {
 		updateURI := resource.URI
 
 		// check append first
-		aclAppend, err := acl.AllowAppend(resource.URI)
+		aclAppend, err := acl.AllowAppend(req.Header.Get("Origin"), resource.URI)
 		if aclAppend > 200 || err != nil {
 			// check if we can write then
-			aclWrite, err := acl.AllowWrite(resource.URI)
+			aclWrite, err := acl.AllowWrite(req.Header.Get("Origin"), resource.URI)
 			if aclWrite > 200 || err != nil {
 				return r.respond(aclWrite, s.handleStatusText(aclWrite, err))
 			}
@@ -957,7 +894,7 @@ func (s *Server) handle(w http.ResponseWriter, req *httpRequest) (r *response) {
 				if !strings.HasSuffix(resource.Path, "/") {
 					resource.Path += "/"
 				}
-				resource, err = acl.pathInformer.GetPathInfo(resource.Base + "/" + resource.Path)
+				resource, err = s.pathInformer.GetPathInfo(resource.Base + "/" + resource.Path)
 				if err != nil {
 					s.debug.Println("POST LDPC req.pathInfo err: " + err.Error())
 					return r.respond(500, err)
@@ -996,7 +933,7 @@ func (s *Server) handle(w http.ResponseWriter, req *httpRequest) (r *response) {
 				return r.respond(201)
 			}
 
-			resource, err = acl.pathInformer.GetPathInfo(resource.Base + "/" + resource.Path)
+			resource, err = s.pathInformer.GetPathInfo(resource.Base + "/" + resource.Path)
 			if err != nil {
 				s.debug.Println("POST LDPR req.pathInfo err: " + err.Error())
 				return r.respond(500, err)
@@ -1127,10 +1064,10 @@ func (s *Server) handle(w http.ResponseWriter, req *httpRequest) (r *response) {
 		w.Header().Add("Link", s.uriManipulator.Brack("http://www.w3.org/ns/ldp#Resource")+"; rel=\"type\"")
 
 		// check append first
-		aclAppend, err := acl.AllowAppend(resource.URI)
+		aclAppend, err := acl.AllowAppend(req.Header.Get("Origin"), resource.URI)
 		if aclAppend > 200 || err != nil {
 			// check if we can write then
-			aclWrite, err := acl.AllowWrite(resource.URI)
+			aclWrite, err := acl.AllowWrite(req.Header.Get("Origin"), resource.URI)
 			if aclWrite > 200 || err != nil {
 				return r.respond(aclWrite, s.handleStatusText(aclWrite, err))
 			}
@@ -1158,7 +1095,7 @@ func (s *Server) handle(w http.ResponseWriter, req *httpRequest) (r *response) {
 				return r.respond(500, err)
 			}
 			// refresh resource and set the right headers
-			resource, err = acl.pathInformer.GetPathInfo(resource.URI)
+			resource, err = s.pathInformer.GetPathInfo(resource.URI)
 			w.Header().Set("Link", s.uriManipulator.Brack(resource.MetaURI)+"; rel=\"meta\", "+s.uriManipulator.Brack(resource.AclURI)+"; rel=\"acl\"")
 			// LDP header
 			w.Header().Add("Link", s.uriManipulator.Brack("http://www.w3.org/ns/ldp#Resource")+"; rel=\"type\"")
@@ -1206,7 +1143,7 @@ func (s *Server) handle(w http.ResponseWriter, req *httpRequest) (r *response) {
 		unlock := lock(resource.Path)
 		defer unlock()
 
-		aclWrite, err := acl.AllowWrite(resource.URI)
+		aclWrite, err := acl.AllowWrite(req.Header.Get("Origin"), resource.URI)
 		if aclWrite > 200 || err != nil {
 			return r.respond(aclWrite, s.handleStatusText(aclWrite, err))
 		}
@@ -1240,7 +1177,7 @@ func (s *Server) handle(w http.ResponseWriter, req *httpRequest) (r *response) {
 		unlock := lock(resource.File)
 		defer unlock()
 
-		aclWrite, err := acl.AllowWrite(resource.URI)
+		aclWrite, err := acl.AllowWrite(req.Header.Get("Origin"), resource.URI)
 		if aclWrite > 200 || err != nil {
 			return r.respond(aclWrite, s.handleStatusText(aclWrite, err))
 		}
@@ -1264,7 +1201,7 @@ func (s *Server) handle(w http.ResponseWriter, req *httpRequest) (r *response) {
 		return r.respond(201)
 
 	case "COPY", "MOVE", "LOCK", "UNLOCK":
-		aclWrite, err := acl.AllowWrite(resource.URI)
+		aclWrite, err := acl.AllowWrite(req.Header.Get("Origin"), resource.URI)
 		if aclWrite > 200 || err != nil {
 			return r.respond(aclWrite, s.handleStatusText(aclWrite, err))
 		}
@@ -1312,5 +1249,56 @@ func (Server) JSONPatch(g *domain.Graph, r io.Reader) error {
 			}
 		}
 	}
+	return nil
+}
+
+// Proxy requests
+func (s *Server) ProxyReq(w http.ResponseWriter, req *httpRequest, reqUrl string) error {
+	uri, err := url.Parse(reqUrl)
+	if err != nil {
+		return err
+	}
+	host := uri.Host
+	if !s.Config.ProxyLocal {
+		if strings.HasPrefix(host, "10.") ||
+			strings.HasPrefix(host, "172.16.") ||
+			strings.HasPrefix(host, "192.168.") ||
+			strings.HasPrefix(host, "localhost") {
+			return errors.New("Proxying requests to the local network is not allowed.")
+		}
+	}
+	if len(req.FormValue("key")) > 0 {
+		token, err := decodeQuery(req.FormValue("key"))
+		if err != nil {
+			s.debug.Println(err.Error())
+		}
+		user, err := GetAuthzFromToken(token, req)
+		if err != nil {
+			s.debug.Println(err.Error())
+		} else {
+			s.debug.Println("Authorization valid for user", user)
+		}
+		req.User = user
+	}
+
+	if len(req.Header.Get("Authorization")) > 0 {
+		token, err := ParseBearerAuthorizationHeader(req.Header.Get("Authorization"))
+		if err != nil {
+			s.debug.Println(err.Error())
+		}
+		user, err := GetAuthzFromToken(token, req)
+		if err != nil {
+			s.debug.Println(err.Error())
+		} else {
+			s.debug.Println("Authorization valid for user", user)
+		}
+		req.User = user
+	}
+
+	req.URL = uri
+	req.Host = host
+	req.RequestURI = uri.RequestURI()
+	req.Header.Set("User", req.User)
+	proxy.ServeHTTP(w, req.Request)
 	return nil
 }

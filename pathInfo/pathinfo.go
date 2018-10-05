@@ -26,8 +26,6 @@ func New(srvConfig domain.ServerConfig) uc.PathInformer {
 }
 
 func (iG pathInfoGetter) GetPathInfo(path string) (*domain.PathInfo, error) {
-	res := &domain.PathInfo{}
-
 	if len(path) == 0 {
 		return nil, errors.New("missing resource path")
 	}
@@ -42,6 +40,7 @@ func (iG pathInfoGetter) GetPathInfo(path string) (*domain.PathInfo, error) {
 		return nil, err
 	}
 
+	res := &domain.PathInfo{}
 	res.Base = p.Scheme + "://" + p.Host
 	res.Root = iG.serverConfig.DataRoot
 	// include host and port if running in vhosts mode

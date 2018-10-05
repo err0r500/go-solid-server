@@ -21,13 +21,13 @@ type DigestAuthorization struct {
 	Type, Source, Username, Nonce, Signature string
 }
 
-func (req *httpRequest) authn(w http.ResponseWriter) string {
+func (s *Server) authn(req *httpRequest, w http.ResponseWriter) string {
 	user, err := req.userCookie()
 	if err != nil {
-		req.Server.debug.Println("userCookie error:", err)
+		//req.Server.debug.Println("userCookie error:", err)
 	}
 	if len(user) > 0 {
-		req.Server.debug.Println("Cookie auth OK for User: " + user)
+		//req.Server.debug.Println("Cookie auth OK for User: " + user)
 		return user
 	}
 
@@ -35,20 +35,21 @@ func (req *httpRequest) authn(w http.ResponseWriter) string {
 	if len(req.Header.Get("Authorization")) > 0 {
 		user, err = WebIDDigestAuth(req)
 		if err != nil {
-			req.Server.debug.Println("WebID-RSA auth error:", err)
+			//req.Server.debug.Println("WebID-RSA auth error:", err)
 		}
 		if len(user) > 0 {
-			req.Server.debug.Println("WebID-RSA auth OK for User: " + user)
+			//req.Server.debug.Println("WebID-RSA auth OK for User: " + user)
 		}
 	}
+
 	// fall back to WebID-TLS
 	if len(user) == 0 {
 		user, err = WebIDTLSAuth(req)
 		if err != nil {
-			req.Server.debug.Println("WebID-TLS error:", err)
+			//req.Server.debug.Println("WebID-TLS error:", err)
 		}
 		if len(user) > 0 {
-			req.Server.debug.Println("WebID-TLS auth OK for User: " + user)
+			//req.Server.debug.Println("WebID-TLS auth OK for User: " + user)
 		}
 	}
 
@@ -56,7 +57,7 @@ func (req *httpRequest) authn(w http.ResponseWriter) string {
 		if len(req.Header.Get("On-Behalf-Of")) > 0 {
 			delegator := req.uriManipulator.Debrack(req.Header.Get("On-Behalf-Of"))
 			if req.wac.VerifyDelegator(delegator, user) {
-				req.Server.debug.Println("Setting delegation user to:", delegator)
+				//req.Server.debug.Println("Setting delegation user to:", delegator)
 				user = delegator
 			}
 		}
@@ -65,7 +66,7 @@ func (req *httpRequest) authn(w http.ResponseWriter) string {
 	}
 
 	user = ""
-	req.Server.debug.Println("Unauthenticated User")
+	//req.Server.debug.Println("Unauthenticated User")
 	return user
 }
 
@@ -200,7 +201,7 @@ func NewTokenValues() map[string]string {
 }
 
 // NewSecureToken generates a signed token to be used during account recovery
-func NewSecureToken(tokenType string, values map[string]string, duration time.Duration, s *Server) (string, error) {
+func (s *Server) NewSecureToken(tokenType string, values map[string]string, duration time.Duration) (string, error) {
 	valid := time.Now().Add(duration).Unix()
 	values["valid"] = fmt.Sprintf("%d", valid)
 	token, err := s.cookie.Encode(tokenType, values)
@@ -212,7 +213,7 @@ func NewSecureToken(tokenType string, values map[string]string, duration time.Du
 }
 
 // ValidateSecureToken returns the values of a secure cookie
-func ValidateSecureToken(tokenType string, token string, s *Server) (map[string]string, error) {
+func (s *Server) ValidateSecureToken(tokenType string, token string) (map[string]string, error) {
 	values := make(map[string]string)
 	err := s.cookie.Decode(tokenType, token, &values)
 	if err != nil {
@@ -223,7 +224,7 @@ func ValidateSecureToken(tokenType string, token string, s *Server) (map[string]
 	return values, nil
 }
 
-func GetValuesFromToken(tokenType string, token string, req *httpRequest, s *Server) (map[string]string, error) {
+func (s *Server) GetValuesFromToken(tokenType string, token string, req *httpRequest) (map[string]string, error) {
 	values := NewTokenValues()
 	token, err := decodeQuery(token)
 	if err != nil {

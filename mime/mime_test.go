@@ -1,4 +1,4 @@
-package gold
+package mime
 
 //
 //import (
@@ -40,13 +40,13 @@ package gold
 //
 //func TestMimeParserExpect(t *testing.T) {
 //	for k, v := range mimeParserExpect {
-//		assert.Equal(t, v, mimeParser[k])
+//		assert.Equal(t, v, MimeParser[k])
 //	}
 //}
 //
 //func TestMimeSerializerExpect(t *testing.T) {
 //	for k, v := range mimeSerializerExpect {
-//		assert.Equal(t, v, mimeSerializer[k])
+//		assert.Equal(t, v, MimeSerializer[k])
 //	}
 //}
 //

@@ -123,7 +123,7 @@ func WebIDDigestAuth(req *httpRequest) (string, error) {
 		return "", errors.New("Wrong secret value in client token!")
 	}
 
-	g := NewGraph(authH.Username)
+	g := domain.NewGraph(authH.Username)
 	err = req.httpCaller.LoadURI(g, authH.Username)
 	if err != nil {
 		return "", err
@@ -134,7 +134,7 @@ func WebIDDigestAuth(req *httpRequest) (string, error) {
 		for range g.All(keyT.Object, domain.NewNS("rdf").Get("type"), domain.NewNS("cert").Get("RSAPublicKey")) {
 			req.debug.Println("Found RSA key in user's profile", keyT.Object.String())
 			for _, pubP := range g.All(keyT.Object, domain.NewNS("cert").Get("pem"), nil) {
-				keyP := term2C(pubP.Object).String()
+				keyP := req.rdfHandler.FromDomain(pubP.Object).String()
 				req.debug.Println("Found matching public key in user's profile", keyP[:10], "...", keyP[len(keyP)-10:len(keyP)])
 				parser, err := ParseRSAPublicPEMKey([]byte(keyP))
 				if err == nil {
@@ -147,9 +147,9 @@ func WebIDDigestAuth(req *httpRequest) (string, error) {
 			}
 			// also loop through modulus/exp
 			for _, pubN := range g.All(keyT.Object, domain.NewNS("cert").Get("modulus"), nil) {
-				keyN := term2C(pubN.Object).String()
+				keyN := req.rdfHandler.FromDomain(pubN.Object).String()
 				for _, pubE := range g.All(keyT.Object, domain.NewNS("cert").Get("exponent"), nil) {
-					keyE := term2C(pubE.Object).String()
+					keyE := req.rdfHandler.FromDomain(pubE.Object).String()
 					req.debug.Println("Found matching modulus and exponent in user's profile", keyN[:10], "...", keyN[len(keyN)-10:len(keyN)])
 					parser, err := ParseRSAPublicKeyNE("RSAPublicKey", keyN, keyE)
 					if err == nil {
@@ -235,7 +235,7 @@ func WebIDTLSAuth(req *httpRequest) (uri string, err error) {
 
 		// pkey from client contains WebID claim
 
-		g := NewGraph(claim)
+		g := domain.NewGraph(claim)
 		err = req.httpCaller.LoadURI(g, claim)
 		if err != nil {
 			return "", err
@@ -295,7 +295,7 @@ func WebIDFromCert(cert []byte) (string, error) {
 }
 
 // AddProfileKeys creates a WebID profile graph and corresponding keys
-func AddProfileKeys(uri string, g *Graph) (*Graph, *rsa.PrivateKey, *rsa.PublicKey, error) {
+func AddProfileKeys(uri string, g *domain.Graph) (*domain.Graph, *rsa.PrivateKey, *rsa.PublicKey, error) {
 	priv, err := rsa.GenerateKey(rand.Reader, rsaBits)
 	if err != nil {
 		return nil, nil, nil, err
@@ -326,7 +326,7 @@ func (req *httpRequest) AddCertKeys(uri string, mod string, exp string) error {
 
 	resource, _ := req.pathInfo(profileURI)
 
-	g := NewGraph(profileURI)
+	g := domain.NewGraph(profileURI)
 	req.fileHandler.ReadFile(g, req.parser, resource.File)
 	g.AddTriple(userTerm, domain.NewNS("cert").Get("key"), keyTerm)
 	g.AddTriple(keyTerm, domain.NewNS("rdf").Get("type"), domain.NewNS("cert").Get("RSAPublicKey"))
@@ -351,12 +351,12 @@ func (req *httpRequest) AddCertKeys(uri string, mod string, exp string) error {
 }
 
 // NewWebIDProfile creates a WebID profile graph based on account data
-func NewWebIDProfile(account webidAccount) *Graph {
+func NewWebIDProfile(account webidAccount) *domain.Graph {
 	profileURI := strings.Split(account.WebID, "#")[0]
 	userTerm := domain.NewResource(account.WebID)
 	profileTerm := domain.NewResource(profileURI)
 
-	g := NewGraph(profileURI)
+	g := domain.NewGraph(profileURI)
 	g.AddTriple(profileTerm, domain.NewNS("rdf").Get("type"), domain.NewNS("foaf").Get("PersonalProfileDocument"))
 	g.AddTriple(profileTerm, domain.NewNS("foaf").Get("maker"), userTerm)
 	g.AddTriple(profileTerm, domain.NewNS("foaf").Get("primaryTopic"), userTerm)
@@ -394,7 +394,7 @@ func NewWebIDProfile(account webidAccount) *Graph {
 func (req *httpRequest) LinkToWebID(account webidAccount) error {
 	resource, _ := req.pathInfo(account.BaseURI + "/")
 
-	g := NewGraph(resource.URI)
+	g := domain.NewGraph(resource.URI)
 	g.AddTriple(domain.NewResource(account.WebID), domain.NewNS("st").Get("account"), domain.NewResource(resource.URI))
 
 	// open account root meta file
@@ -417,7 +417,7 @@ func (req *httpRequest) getAccountWebID() string {
 	resource, err := req.pathInfo(req.BaseURI())
 	if err == nil {
 		resource, _ = req.pathInfo(resource.Base)
-		g := NewGraph(resource.MetaURI)
+		g := domain.NewGraph(resource.MetaURI)
 		req.fileHandler.ReadFile(g, req.parser, resource.MetaFile)
 		if g.Len() >= 1 {
 			webid := g.One(nil, domain.NewNS("st").Get("account"), domain.NewResource(resource.MetaURI))
@@ -431,8 +431,8 @@ func (req *httpRequest) getAccountWebID() string {
 }
 
 // AddWorkspaces creates all the necessary workspaces corresponding to a new account
-func (req *httpRequest) AddWorkspaces(account webidAccount, g *Graph) error {
-	pref := NewGraph(account.PrefURI)
+func (req *httpRequest) AddWorkspaces(account webidAccount, g *domain.Graph) error {
+	pref := domain.NewGraph(account.PrefURI)
 	prefTerm := domain.NewResource(account.PrefURI)
 	pref.AddTriple(prefTerm, domain.NewNS("rdf").Get("type"), domain.NewNS("space").Get("ConfigurationFile"))
 	pref.AddTriple(prefTerm, domain.NewNS("dct").Get("title"), domain.NewLiteral("Preferences file"))
@@ -451,7 +451,7 @@ func (req *httpRequest) AddWorkspaces(account webidAccount, g *Graph) error {
 		// No one but the user is allowed access by default
 		aclTerm := domain.NewResource(resource.AclURI + "#owner")
 		wsTerm := domain.NewResource(resource.URI)
-		a := NewGraph(resource.AclURI)
+		a := domain.NewGraph(resource.AclURI)
 		a.AddTriple(aclTerm, domain.NewNS("rdf").Get("type"), domain.NewNS("acl").Get("Authorization"))
 		a.AddTriple(aclTerm, domain.NewNS("acl").Get("accessTo"), wsTerm)
 		a.AddTriple(aclTerm, domain.NewNS("acl").Get("accessTo"), domain.NewResource(resource.AclURI))
@@ -530,7 +530,7 @@ func (req *httpRequest) AddWorkspaces(account webidAccount, g *Graph) error {
 }
 
 func createTypeIndex(req *httpRequest, indexType, url string) error {
-	typeIndex := NewGraph(url)
+	typeIndex := domain.NewGraph(url)
 	typeIndex.AddTriple(domain.NewResource(url), domain.NewNS("rdf").Get("type"), domain.NewNS("st").Get("TypeIndex"))
 	typeIndex.AddTriple(domain.NewResource(url), domain.NewNS("rdf").Get("type"), domain.NewNS("st").Get(indexType))
 

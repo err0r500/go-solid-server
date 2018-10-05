@@ -1,35 +1,38 @@
-package gold
+package mime
 
 import (
 	"errors"
-	crdf "github.com/presbrey/goraptor"
 	"mime"
 	"path/filepath"
 
-	"github.com/rakyll/magicmime"
+	crdf "github.com/presbrey/goraptor"
+
 	"regexp"
 	"sync"
+
+	"github.com/rakyll/magicmime"
 )
 
-var mimeParser = map[string]string{
+// fixme : remove these global vars
+var MimeSerializer = map[string]string{
+	"application/ld+json": "internal",
+	"text/html":           "internal",
+}
+
+var MimeParser = map[string]string{
 	"application/ld+json":       "jsonld",
 	"application/json":          "internal",
 	"application/sparql-update": "internal",
 }
 
-var mimeSerializer = map[string]string{
-	"application/ld+json": "internal",
-	"text/html":           "internal",
-}
-
-var mimeRdfExt = map[string]string{
+var MimeRdfExt = map[string]string{
 	".ttl":    "text/turtle",
 	".n3":     "text/n3",
 	".rdf":    "application/rdf+xml",
 	".jsonld": "application/ld+json",
 }
 
-var rdfExtensions = []string{
+var RdfExtensions = []string{
 	".ttl",
 	".n3",
 	".rdf",
@@ -37,14 +40,14 @@ var rdfExtensions = []string{
 }
 
 var (
-	serializerMimes = []string{}
+	SerializerMimes = []string{}
 	validMimeType   = regexp.MustCompile(`^\w+/\w+$`)
 	mutex           = &sync.Mutex{}
 )
 
 func init() {
 	// add missing extensions
-	for k, v := range mimeRdfExt {
+	for k, v := range MimeRdfExt {
 		mime.AddExtensionType(k, v)
 	}
 
@@ -53,9 +56,9 @@ func init() {
 		case "", "text/html":
 			continue
 		}
-		mimeParser[syntax.MimeType] = syntax.Name
+		MimeParser[syntax.MimeType] = syntax.Name
 	}
-	mimeParser["text/n3"] = mimeParser["text/turtle"]
+	MimeParser["text/n3"] = MimeParser["text/turtle"]
 
 	for name, syntax := range crdf.SerializerSyntax {
 		switch name {
@@ -66,15 +69,15 @@ func init() {
 			// only activate: rdfxml-abbrev
 			continue
 		}
-		mimeSerializer[syntax.MimeType] = syntax.Name
+		MimeSerializer[syntax.MimeType] = syntax.Name
 	}
 
-	for mime := range mimeSerializer {
+	for mime := range MimeSerializer {
 		switch mime {
 		case "application/xhtml+xml":
 			continue
 		}
-		serializerMimes = append(serializerMimes, mime)
+		SerializerMimes = append(SerializerMimes, mime)
 	}
 
 	magicmime.Open(magicmime.MAGIC_MIME_TYPE)
@@ -99,7 +102,7 @@ func GuessMimeType(path string) (mimeType string, err error) {
 }
 
 func LookupExt(ctype string) string {
-	for k, v := range mimeRdfExt {
+	for k, v := range MimeRdfExt {
 		if v == ctype {
 			return k
 		}
@@ -108,15 +111,15 @@ func LookupExt(ctype string) string {
 }
 
 func LookUpCtype(ext string) string {
-	return mimeRdfExt[ext]
+	return MimeRdfExt[ext]
 }
 
 func AddRDFExtension(ext string) {
-	rdfExtensions = append(rdfExtensions, ext)
+	RdfExtensions = append(RdfExtensions, ext)
 }
 
 func IsRdfExtension(ext string) bool {
-	for _, v := range rdfExtensions {
+	for _, v := range RdfExtensions {
 		if v == ext {
 			return true
 		}

@@ -4,19 +4,22 @@ import (
 	"fmt"
 	"net/http"
 
+	"github.com/err0r500/go-solid-server/uc"
+
 	"github.com/err0r500/go-solid-server/domain"
 )
 
 type HttpCaller interface {
-	LoadURI(g *Graph, uri string) (err error)
+	LoadURI(g *domain.Graph, uri string) (err error)
 }
 
 type OrigHttpCaller struct {
 	uriManipulator domain.URIManipulator
+	rdfHandler     uc.Encoder
 }
 
 // LoadURI is used to load RDF data from a specific URI
-func (o OrigHttpCaller) LoadURI(g *Graph, uri string) (err error) {
+func (o OrigHttpCaller) LoadURI(g *domain.Graph, uri string) (err error) {
 	doc := o.uriManipulator.Defrag(uri)
 	q, err := http.NewRequest("GET", doc, nil)
 	if err != nil {
@@ -30,7 +33,7 @@ func (o OrigHttpCaller) LoadURI(g *Graph, uri string) (err error) {
 	if r != nil {
 		defer r.Body.Close()
 		if r.StatusCode == 200 {
-			g.ParseBase(r.Body, r.Header.Get("Content-Type"), doc)
+			o.rdfHandler.ParseBase(g, r.Body, r.Header.Get("Content-Type"), doc)
 		} else {
 			err = fmt.Errorf("Could not fetch graph from %s - HTTP %d", uri, r.StatusCode)
 		}

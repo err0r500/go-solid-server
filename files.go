@@ -4,46 +4,50 @@ import (
 	"log"
 	"os"
 
-	crdf "github.com/presbrey/goraptor"
+	"github.com/err0r500/go-solid-server/uc"
+
+	"github.com/err0r500/go-solid-server/domain"
 )
 
 type FilesHandler interface {
-	WriteFile(g *Graph, file *os.File, mime string) error
-	AppendFile(g *Graph, filename string, baseURI string)
-	ReadFile(g *Graph, parser Parser, filename string)
+	WriteFile(g *domain.Graph, file *os.File, mime string) error
+	AppendFile(g *domain.Graph, filename string, baseURI string)
+	ReadFile(g *domain.Graph, parser uc.Encoder, filename string)
 }
 
-type OrigFilesHandler struct{}
+type OrigFilesHandler struct {
+	rdfHandler uc.Encoder
+}
 
 // WriteFile is used to dump RDF from a Graph into a file
-func (OrigFilesHandler) WriteFile(g *Graph, file *os.File, mime string) error {
-	serializerName := mimeSerializer[mime]
-	if len(serializerName) == 0 {
-		serializerName = "turtle"
-	}
-	serializer := crdf.NewSerializer(serializerName)
-	defer serializer.Free()
-	err := serializer.SetFile(file, g.uri)
-	if err != nil {
-		return err
-	}
-	ch := make(chan *crdf.Statement, 1024)
-	go func() {
-		for triple := range g.IterTriples() {
-			ch <- &crdf.Statement{
-				Subject:   term2C(triple.Subject),
-				Predicate: term2C(triple.Predicate),
-				Object:    term2C(triple.Object),
-			}
-		}
-		close(ch)
-	}()
-	serializer.AddN(ch)
+func (OrigFilesHandler) WriteFile(g *domain.Graph, file *os.File, mime string) error {
+	//serializerName := mimeSerializer[mime]
+	//if len(serializerName) == 0 {
+	//	serializerName = "turtle"
+	//}
+	//serializer := crdf.NewSerializer(serializerName)
+	//defer serializer.Free()
+	//err := serializer.SetFile(file, g.URI())
+	//if err != nil {
+	//	return err
+	//}
+	//ch := make(chan *crdf.Statement, 1024)
+	//go func() {
+	//	for triple := range g.IterTriples() {
+	//		ch <- &crdf.Statement{
+	//			Subject:   FromDomain(triple.Subject),
+	//			Predicate: FromDomain(triple.Predicate),
+	//			Object:    FromDomain(triple.Object),
+	//		}
+	//	}
+	//	close(ch)
+	//}()
+	//serializer.AddN(ch)
 	return nil
 }
 
 // AppendFile is used to append RDF from a file, using a base URI
-func (OrigFilesHandler) AppendFile(g *Graph, filename string, baseURI string) {
+func (h OrigFilesHandler) AppendFile(g *domain.Graph, filename string, baseURI string) {
 	_, err := os.Stat(filename)
 	if os.IsNotExist(err) {
 		return
@@ -57,11 +61,12 @@ func (OrigFilesHandler) AppendFile(g *Graph, filename string, baseURI string) {
 		log.Println(err)
 		return
 	}
-	g.ParseBase(f, "text/turtle", baseURI)
+
+	h.rdfHandler.ParseBase(g, f, "text/turtle", baseURI)
 }
 
 // ReadFile is used to read RDF data from a file into the graph
-func (OrigFilesHandler) ReadFile(g *Graph, parser Parser, filename string) {
+func (OrigFilesHandler) ReadFile(g *domain.Graph, parser uc.Encoder, filename string) {
 	stat, err := os.Stat(filename)
 	if os.IsNotExist(err) {
 		return

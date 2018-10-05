@@ -123,7 +123,7 @@ func logIn(w http.ResponseWriter, req *httpRequest, s *Server) SystemReturn {
 	}
 	// try to fetch hashed password from root ,acl
 	resource, _ = req.pathInfo(resource.Base)
-	kb := NewGraph(resource.AclURI)
+	kb := domain.NewGraph(resource.AclURI)
 	s.fileHandler.ReadFile(kb, s.parser, resource.AclFile)
 	s.debug.Println("Looking for password in", resource.AclFile)
 	// find the policy containing root acl
@@ -218,7 +218,7 @@ func sendRecoveryToken(w http.ResponseWriter, req *httpRequest, s *Server) Syste
 	// try to fetch recovery email from root ,acl
 	resource, _ = req.pathInfo(resource.Base)
 	email := ""
-	kb := NewGraph(resource.AclURI)
+	kb := domain.NewGraph(resource.AclURI)
 	s.fileHandler.ReadFile(kb, s.parser, resource.AclFile)
 	// find the policy containing root acl
 	for range kb.All(nil, domain.NewNS("acl").Get("accessTo"), domain.NewResource(resource.AclURI)) {
@@ -299,7 +299,7 @@ func validateRecoveryToken(w http.ResponseWriter, req *httpRequest, s *Server) S
 		accountBase := resource.Base + "/"
 		resource, _ = req.pathInfo(accountBase)
 
-		g := NewGraph(resource.AclURI)
+		g := domain.NewGraph(resource.AclURI)
 		s.fileHandler.ReadFile(g, s.parser, resource.AclFile)
 		// find the policy containing root acl
 		for _, m := range g.All(nil, domain.NewNS("acl").Get("mode"), domain.NewNS("acl").Get("Control")) {
@@ -419,7 +419,7 @@ func newAccount(w http.ResponseWriter, req *httpRequest, s *Server) SystemReturn
 
 	// Write ACL for the profile
 	aclTerm := domain.NewResource(resource.AclURI + "#owner")
-	g = NewGraph(resource.AclURI)
+	g = domain.NewGraph(resource.AclURI)
 	g.AddTriple(aclTerm, domain.NewNS("type").Get("type"), domain.NewNS("acl").Get("Authorization"))
 	g.AddTriple(aclTerm, domain.NewNS("acl").Get("accessTo"), domain.NewResource(webidURL))
 	g.AddTriple(aclTerm, domain.NewNS("acl").Get("accessTo"), domain.NewResource(resource.AclURI))
@@ -465,7 +465,7 @@ func newAccount(w http.ResponseWriter, req *httpRequest, s *Server) SystemReturn
 	// No one but the user is allowed access by default
 	resource, _ = req.pathInfo(accountBase)
 	aclTerm = domain.NewResource(resource.AclURI + "#owner")
-	g = NewGraph(resource.AclURI)
+	g = domain.NewGraph(resource.AclURI)
 	g.AddTriple(aclTerm, domain.NewNS("rdf").Get("type"), domain.NewNS("acl").Get("Authorization"))
 	g.AddTriple(aclTerm, domain.NewNS("acl").Get("accessTo"), domain.NewResource(resource.URI))
 	g.AddTriple(aclTerm, domain.NewNS("acl").Get("accessTo"), domain.NewResource(resource.AclURI))

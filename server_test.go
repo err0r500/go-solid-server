@@ -1,5 +1,42 @@
 package gold_test
 
+import (
+	"strings"
+	"testing"
+
+	"github.com/err0r500/go-solid-server/encoders"
+
+	gold "github.com/err0r500/go-solid-server"
+	"github.com/err0r500/go-solid-server/domain"
+	"github.com/stretchr/testify/assert"
+)
+
+func TestGraphPatch(t *testing.T) {
+	var (
+		buf   string
+		err   error
+		graph = domain.NewGraph("https://test/")
+	)
+
+	h := encoders.NewMainSerializer()
+
+	s := gold.Server{}
+	s.JSONPatch(graph, strings.NewReader(`{"a":{"b":[{"type":"uri","value":"c"}]}}`))
+	buf, err = h.Serialize(graph, "text/turtle")
+	assert.Nil(t, err)
+	assert.Equal(t, buf, "@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .\n\n<a>\n    <b> <c> .\n\n")
+
+	s.JSONPatch(graph, strings.NewReader(`{"a":{"b":[{"type":"uri","value":"c2"}]}}`))
+	buf, err = h.Serialize(graph, "text/turtle")
+	assert.Nil(t, err)
+	assert.Equal(t, buf, "@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .\n\n<a>\n    <b> <c2> .\n\n")
+
+	s.JSONPatch(graph, strings.NewReader(`{"a":{"b2":[{"type":"uri","value":"c2"}]}}`))
+	buf, err = h.Serialize(graph, "text/turtle")
+	assert.Nil(t, err)
+	assert.Equal(t, buf, "@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .\n\n<a>\n    <b> <c2> ;\n    <b2> <c2> .\n\n")
+}
+
 // fixme : these are integration tests. reactivate them when unit tests and code structure are OK
 //
 //import (
@@ -823,7 +860,7 @@ package gold_test
 //	g := NewGraph(testServer.URL + "/" + file)
 //	g.ReadFile(file)
 //	assert.Equal(t, 1, g.Len())
-//	data, err := g.Serialize(("text/turtle"))
+//	data, err := g.serialize(("text/turtle"))
 //	assert.NoError(t, err)
 //	assert.Equal(t, "@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .\n\n<a>\n    <b> <c> .\n\n", data)
 //

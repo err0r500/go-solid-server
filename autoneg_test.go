@@ -8,7 +8,10 @@ import (
 	"net/http"
 	"testing"
 
+	"github.com/err0r500/go-solid-server/encoders"
+
 	"github.com/err0r500/go-solid-server/domain"
+	"github.com/err0r500/go-solid-server/mime"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -21,7 +24,7 @@ func mockAccept(accept string) (al AcceptList, err error) {
 	req := &http.Request{}
 	req.Header = make(http.Header)
 	req.Header["Accept"] = []string{accept}
-	myreq := &httpRequest{req, nil, "", "", "", false, domain.URIHandler{}, WAC{}, OrigHttpCaller{}}
+	myreq := &httpRequest{req, nil, "", "", "", false, domain.URIHandler{}, WAC{}, OrigHttpCaller{}, encoders.RdfEncoder{}}
 	al, err = myreq.Accept()
 	return
 }
@@ -48,7 +51,7 @@ func TestNegotiateRDF(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	contentType, err := al.Negotiate(serializerMimes...)
+	contentType, err := al.Negotiate(mime.SerializerMimes...)
 	if err != nil {
 		t.Fatal(err)
 	}

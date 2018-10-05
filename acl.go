@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/err0r500/go-solid-server/domain"
+	"github.com/err0r500/go-solid-server/uc"
 )
 
 // WAC WebAccessControl object
@@ -18,7 +19,7 @@ type WAC struct {
 	user           string
 	key            string
 	fileHandler    FilesHandler
-	parser         Parser
+	parser         uc.Encoder
 	uriManipulator domain.URIManipulator
 	httpCaller     HttpCaller
 }
@@ -47,7 +48,7 @@ func (acl *WAC) allow(mode string, path string) (int, error) {
 		acl.srv.debug.Println("Checking " + accessType + " <" + mode + "> to " + p.URI + " for WebID: " + acl.user)
 		acl.srv.debug.Println("Looking for policies in " + p.AclFile)
 
-		aclGraph := NewGraph(p.AclURI)
+		aclGraph := domain.NewGraph(p.AclURI)
 		acl.fileHandler.ReadFile(aclGraph, acl.parser, p.AclFile)
 		if aclGraph.Len() > 0 {
 			acl.srv.debug.Println("Found policies in " + p.AclFile)
@@ -82,7 +83,7 @@ func (acl *WAC) allow(mode string, path string) (int, error) {
 						}
 
 						groupURI := acl.uriManipulator.Debrack(t.Object.String())
-						groupGraph := NewGraph(groupURI)
+						groupGraph := domain.NewGraph(groupURI)
 						acl.httpCaller.LoadURI(groupGraph, groupURI)
 						if groupGraph.Len() > 0 && groupGraph.One(t.Object, domain.NewNS("rdf").Get("type"), domain.NewNS("foaf").Get("Group")) != nil {
 							for range groupGraph.All(t.Object, domain.NewNS("foaf").Get("member"), domain.NewResource(acl.user)) {
@@ -137,7 +138,7 @@ func (acl *WAC) allow(mode string, path string) (int, error) {
 							return 200, nil
 						}
 						groupURI := acl.uriManipulator.Debrack(t.Object.String())
-						groupGraph := NewGraph(groupURI)
+						groupGraph := domain.NewGraph(groupURI)
 						acl.httpCaller.LoadURI(groupGraph, groupURI)
 						if groupGraph.Len() > 0 && groupGraph.One(t.Object, domain.NewNS("rdf").Get("type"), domain.NewNS("foaf").Get("Group")) != nil {
 							for range groupGraph.All(t.Object, domain.NewNS("foaf").Get("member"), domain.NewResource(acl.user)) {
@@ -212,7 +213,7 @@ func (acl *WAC) AllowControl(path string) (int, error) {
 }
 
 func (acl *WAC) VerifyDelegator(delegator string, delegatee string) bool {
-	g := NewGraph(delegator)
+	g := domain.NewGraph(delegator)
 	err := acl.httpCaller.LoadURI(g, delegator)
 	if err != nil {
 		log.Println("Error loading graph for " + delegator)

@@ -7,6 +7,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/err0r500/go-solid-server/mail"
 )
 
 // ServerConfig holds a list of configuration parameters for the server
@@ -90,7 +92,7 @@ type ServerConfig struct {
 	BoltPath string
 
 	// SMTPConfig holds the settings for the remote SMTP user/server
-	//SMTPConfig mail.EmailConfig
+	SMTPConfig mail.EmailConfig
 }
 
 // NewServerConfig creates a new config object

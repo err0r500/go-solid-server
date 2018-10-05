@@ -8,7 +8,10 @@ import (
 	"strings"
 	"text/scanner"
 
+	"github.com/err0r500/go-solid-server/encoders"
+
 	"github.com/err0r500/go-solid-server/domain"
+	"github.com/err0r500/go-solid-server/uc"
 )
 
 // SPARQLUpdateQuery contains a verb, the body of the query and the graph
@@ -16,14 +19,14 @@ type SPARQLUpdateQuery struct {
 	verb string
 	body string
 
-	graph Graph
+	graph domain.Graph
 }
 
 // SPARQLUpdate contains the base URI and a list of queries
 type SPARQLUpdate struct {
 	baseURI string
 	queries []SPARQLUpdateQuery
-	parser  Parser
+	parser  uc.Encoder
 }
 
 // NewSPARQLUpdate creates a new SPARQL object
@@ -31,7 +34,7 @@ func NewSPARQLUpdate(baseURI string) *SPARQLUpdate {
 	return &SPARQLUpdate{
 		baseURI: baseURI,
 		queries: []SPARQLUpdateQuery{},
-		parser:  OrigParser{},
+		parser:  encoders.NewMainSerializer(),
 	}
 }
 
@@ -66,7 +69,7 @@ func (sparql *SPARQLUpdate) Parse(src io.Reader) error {
 			if level == 0 {
 				query := SPARQLUpdateQuery{
 					body:  string(b[start+1 : s.Position.Offset]),
-					graph: *NewGraph(sparql.baseURI),
+					graph: *domain.NewGraph(sparql.baseURI),
 					verb:  verb,
 				}
 				sparql.parser.Parse(&query.graph, strings.NewReader(query.body), "text/turtle")
@@ -87,7 +90,7 @@ func (sparql *SPARQLUpdate) Parse(src io.Reader) error {
 
 // SPARQLUpdate is used to update a graph from a SPARQL query
 // Ugly, needs to be improved
-func (g *Graph) SPARQLUpdate(sparql *SPARQLUpdate) (int, error) {
+func (sparql *SPARQLUpdate) SPARQLUpdate(g *domain.Graph) (int, error) {
 	for _, query := range sparql.queries {
 		if query.verb == "DELETE" || query.verb == "DELETE DATA" {
 			for pattern := range query.graph.IterTriples() {

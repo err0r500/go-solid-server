@@ -54,7 +54,7 @@ package gold_test
 //			},
 //		},
 //	}
-//	user1n3, err := user1g.Serialize("text/turtle")
+//	user1n3, err := user1g.serialize("text/turtle")
 //	assert.NoError(t, err)
 //	req1, err := http.NewRequest("PUT", user1, strings.NewReader(user1n3))
 //	assert.NoError(t, err)
@@ -84,7 +84,7 @@ package gold_test
 //			},
 //		},
 //	}
-//	user2n3, err := user2g.Serialize("text/turtle")
+//	user2n3, err := user2g.serialize("text/turtle")
 //	assert.NoError(t, err)
 //	req2, err := http.NewRequest("PUT", user2, strings.NewReader(user2n3))
 //	assert.NoError(t, err)

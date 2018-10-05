@@ -11,13 +11,12 @@ import (
 	"github.com/err0r500/go-solid-server/uc"
 )
 
-// fixme set config
-func New() uc.Mailer {
-	return smtpMailer{}
+func New(config EmailConfig) uc.Mailer {
+	return smtpMailer{config}
 }
 
 type smtpMailer struct {
-	config emailConfig
+	config EmailConfig
 }
 
 type emailStruct struct {
@@ -29,8 +28,8 @@ type emailStruct struct {
 	Body     string
 }
 
-// emailConfig holds configuration values for remote SMTP servers
-type emailConfig struct {
+// EmailConfig holds configuration values for remote SMTP servers
+type EmailConfig struct {
 	// Name of the remote SMTP server account, i.e. Server admin
 	Name string
 	// Addr is the remote SMTP server email address, i.e. admin@server.org

@@ -3,6 +3,7 @@ package gold
 import (
 	"bufio"
 	"bytes"
+	"crypto/tls"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -17,7 +18,10 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/err0r500/go-solid-server/encoders"
+
 	"github.com/err0r500/go-solid-server/domain"
+	"github.com/err0r500/go-solid-server/mime"
 	"github.com/err0r500/go-solid-server/uc"
 
 	"github.com/boltdb/bolt"
@@ -81,8 +85,8 @@ type Server struct {
 	mailer         uc.Mailer
 	uriManipulator domain.URIManipulator
 	fileHandler    FilesHandler
-	parser         Parser
-	rdfHandler     RdfHandler
+	parser         uc.Encoder
+	rdfHandler     encoders.RdfEncoder // fixme : remove this one
 }
 
 type httpRequest struct {
@@ -95,7 +99,18 @@ type httpRequest struct {
 	uriManipulator domain.URIManipulator
 	wac            WAC
 	httpCaller     HttpCaller
+	rdfHandler     encoders.RdfEncoder
 }
+
+var (
+	httpClient = &http.Client{
+		Transport: &http.Transport{
+			TLSClientConfig: &tls.Config{
+				InsecureSkipVerify: true,
+			},
+		},
+	}
+)
 
 func (req httpRequest) BaseURI() string {
 	scheme := "http"
@@ -184,8 +199,8 @@ func NewServer(config *ServerConfig) *Server {
 			LockSystem: webdav.NewMemLS(),
 		},
 	}
-	AddRDFExtension(s.Config.ACLSuffix)
-	AddRDFExtension(s.Config.MetaSuffix)
+	mime.AddRDFExtension(s.Config.ACLSuffix)
+	mime.AddRDFExtension(s.Config.MetaSuffix)
 	if config.Debug {
 		s.debug = log.New(os.Stderr, debugPrefix, debugFlags)
 	} else {
@@ -234,7 +249,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	defer func() {
 		req.Body.Close()
 	}()
-	r := s.handle(w, &httpRequest{req, s, "", "", "", false, s.uriManipulator, WAC{}, OrigHttpCaller{}}) // fixme : maybe not a good idea to build a new struct on each
+	r := s.handle(w, &httpRequest{req, s, "", "", "", false, s.uriManipulator, WAC{}, OrigHttpCaller{}, encoders.RdfEncoder{}}) // fixme : maybe not a good idea to build a new struct on each
 	for key := range r.headers {
 		w.Header().Set(key, r.headers.Get(key))
 	}
@@ -380,7 +395,7 @@ func (s *Server) handle(w http.ResponseWriter, req *httpRequest) (r *response) {
 
 	dataMime := req.Header.Get(HCType)
 	dataMime = strings.Split(dataMime, ";")[0]
-	dataHasParser := len(mimeParser[dataMime]) > 0
+	dataHasParser := len(mime.MimeParser[dataMime]) > 0
 	if len(dataMime) > 0 {
 		s.debug.Println("Content-Type: " + dataMime)
 		if dataMime != "multipart/form-data" && !dataHasParser && req.Method != "PUT" && req.Method != "HEAD" && req.Method != "OPTIONS" {
@@ -394,7 +409,7 @@ func (s *Server) handle(w http.ResponseWriter, req *httpRequest) (r *response) {
 	contentType := "text/turtle"
 	acceptList, _ := req.Accept()
 	if len(acceptList) > 0 && acceptList[0].SubType != "*" {
-		contentType, err = acceptList.Negotiate(serializerMimes...)
+		contentType, err = acceptList.Negotiate(mime.SerializerMimes...)
 		if err != nil {
 			s.debug.Println("Accept type not acceptable: " + err.Error())
 			return r.respond(406, "HTTP 406 - Accept type not acceptable: "+err.Error())
@@ -521,7 +536,7 @@ func (s *Server) handle(w http.ResponseWriter, req *httpRequest) (r *response) {
 			return r.respond(304, "304 - Not Modified")
 		}
 
-		g := NewGraph(resource.URI)
+		g := domain.NewGraph(resource.URI)
 
 		if resource.IsDir {
 			if len(s.Config.DirIndex) > 0 && contentType == "text/html" {
@@ -557,7 +572,7 @@ func (s *Server) handle(w http.ResponseWriter, req *httpRequest) (r *response) {
 				g.AddTriple(root, domain.NewResource("http://www.w3.org/ns/posix/stat#mtime"), domain.NewLiteral(fmt.Sprintf("%d", resource.ModTime.Unix())))
 				g.AddTriple(root, domain.NewResource("http://www.w3.org/ns/posix/stat#size"), domain.NewLiteral(fmt.Sprintf("%d", resource.Size)))
 
-				kb := NewGraph(resource.MetaURI)
+				kb := domain.NewGraph(resource.MetaURI)
 				s.fileHandler.ReadFile(kb, s.parser, resource.MetaFile)
 				if kb.Len() > 0 {
 					for triple := range kb.IterTriples() {
@@ -631,7 +646,7 @@ func (s *Server) handle(w http.ResponseWriter, req *httpRequest) (r *response) {
 										g.AddTriple(_s, domain.NewResource("http://www.w3.org/1999/02/22-rdf-syntax-ns#type"), domain.NewResource("http://www.w3.org/ns/ldp#BasicContainer"))
 										g.AddTriple(_s, domain.NewResource("http://www.w3.org/1999/02/22-rdf-syntax-ns#type"), domain.NewResource("http://www.w3.org/ns/ldp#Container"))
 									}
-									kb := NewGraph(f.URI)
+									kb := domain.NewGraph(f.URI)
 									s.fileHandler.ReadFile(kb, s.parser, f.MetaFile)
 									if kb.Len() > 0 {
 										for _, st := range kb.All(_s, domain.NewResource("http://www.w3.org/1999/02/22-rdf-syntax-ns#type"), nil) {
@@ -662,7 +677,7 @@ func (s *Server) handle(w http.ResponseWriter, req *httpRequest) (r *response) {
 											// stop after the first line
 											for scanner.Scan() {
 												if strings.HasPrefix(scanner.Text(), "@prefix") || strings.HasPrefix(scanner.Text(), "@base") {
-													kb := NewGraph(f.URI)
+													kb := domain.NewGraph(f.URI)
 													s.fileHandler.ReadFile(kb, s.parser, f.File)
 													if kb.Len() > 0 {
 														for _, st := range kb.All(domain.NewResource(f.URI), domain.NewResource("http://www.w3.org/1999/02/22-rdf-syntax-ns#type"), nil) {
@@ -698,7 +713,7 @@ func (s *Server) handle(w http.ResponseWriter, req *httpRequest) (r *response) {
 		} else {
 			magicType = resource.FileType
 			maybeRDF = resource.MaybeRDF
-			if len(mimeRdfExt[resource.Extension]) > 0 {
+			if len(mime.MimeRdfExt[resource.Extension]) > 0 {
 				maybeRDF = true
 			}
 			if !maybeRDF && magicType == "text/plain" {
@@ -836,7 +851,7 @@ func (s *Server) handle(w http.ResponseWriter, req *httpRequest) (r *response) {
 				return r.respond(400, errmsg)
 			}
 
-			g := NewGraph(resource.URI)
+			g := domain.NewGraph(resource.URI)
 			s.fileHandler.ReadFile(g, s.parser, resource.File)
 
 			switch dataMime {
@@ -845,7 +860,7 @@ func (s *Server) handle(w http.ResponseWriter, req *httpRequest) (r *response) {
 			case "application/sparql-update":
 				sparql := NewSPARQLUpdate(g.URI())
 				sparql.Parse(body)
-				ecode, err := g.SPARQLUpdate(sparql)
+				ecode, err := sparql.SPARQLUpdate(g)
 				if err != nil {
 					return r.respond(ecode, "Error processing SPARQL Update: "+err.Error())
 				}
@@ -1047,7 +1062,7 @@ func (s *Server) handle(w http.ResponseWriter, req *httpRequest) (r *response) {
 			}
 
 			if dataHasParser {
-				g := NewGraph(resource.URI)
+				g := domain.NewGraph(resource.URI)
 				s.fileHandler.ReadFile(g, s.parser, resource.File)
 
 				switch dataMime {
@@ -1056,7 +1071,7 @@ func (s *Server) handle(w http.ResponseWriter, req *httpRequest) (r *response) {
 				case "application/sparql-update":
 					sparql := NewSPARQLUpdate(g.URI())
 					sparql.Parse(req.Body)
-					ecode, err := g.SPARQLUpdate(sparql)
+					ecode, err := sparql.SPARQLUpdate(g)
 					if err != nil {
 						println(err.Error())
 						return r.respond(ecode, "Error processing SPARQL Update: "+err.Error())
@@ -1265,7 +1280,7 @@ type jsonPatch map[string]map[string][]struct {
 }
 
 // JSONPatch is used to perform a PATCH operation on a Graph using data from the reader
-func (Server) JSONPatch(g *Graph, r io.Reader) error {
+func (Server) JSONPatch(g *domain.Graph, r io.Reader) error {
 	v := make(jsonPatch)
 	data, err := ioutil.ReadAll(r)
 	if err != nil {
@@ -1275,7 +1290,7 @@ func (Server) JSONPatch(g *Graph, r io.Reader) error {
 	if err != nil {
 		return err
 	}
-	base, _ := url.Parse(g.uri)
+	base, _ := url.Parse(g.URI())
 	for s, sv := range v {
 		su, _ := base.Parse(s)
 		for p, pv := range sv {

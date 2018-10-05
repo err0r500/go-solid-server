@@ -9,6 +9,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/err0r500/go-solid-server/mime"
 )
 
 type pathInfo struct {
@@ -101,9 +103,9 @@ func (req *httpRequest) pathInfo(path string) (*pathInfo, error) {
 				res.URI += "/"
 			}
 		} else {
-			res.FileType, res.Extension, res.MaybeRDF = MimeLookup(res.File)
+			res.FileType, res.Extension, res.MaybeRDF = mime.MimeLookup(res.File)
 			if len(res.FileType) == 0 {
-				res.FileType, err = GuessMimeType(res.File)
+				res.FileType, err = mime.GuessMimeType(res.File)
 				if err != nil {
 					req.Server.debug.Println(err)
 				}

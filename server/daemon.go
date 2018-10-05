@@ -11,7 +11,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/linkeddata/gold"
+	gold "github.com/err0r500/go-solid-server"
+	"github.com/err0r500/go-solid-server/mail"
 )
 
 var (
@@ -134,7 +135,7 @@ func main() {
 		if len(*emailName) > 0 && len(*emailAddr) > 0 && len(*emailUser) > 0 &&
 			len(*emailPass) > 0 && len(*emailServ) > 0 && len(*emailPort) > 0 {
 			ep, _ := strconv.Atoi(*emailPort)
-			config.SMTPConfig = gold.EmailConfig{
+			config.SMTPConfig = mail.EmailConfig{
 				Name:     *emailName,
 				Addr:     *emailAddr,
 				User:     *emailUser,

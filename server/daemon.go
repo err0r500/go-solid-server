@@ -149,14 +149,13 @@ func main() {
 	}
 	_, httpsPort, _ = net.SplitHostPort(config.ListenHTTPS)
 
-	handler := gold.NewServer(config)
-
-	// Start Bolt
-	err = handler.StartBolt()
-	if err != nil {
-		log.Fatalln(err)
-	}
-	defer handler.BoltDB.Close()
+	handler := gold.NewServer(*config)
+	// Start Bolt // fixme : the defer close() is now missing, pass the bolt.DB connection in NewServer() above, should be enough
+	//err = handler.StartBolt()
+	//if err != nil {
+	//	log.Fatalln(err)
+	//}
+	//defer handler.BoltDB.Close()
 
 	if os.Getenv("FCGI_ROLE") != "" {
 		err = fcgi.Serve(nil, handler)

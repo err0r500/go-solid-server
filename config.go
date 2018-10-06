@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/err0r500/go-solid-server/webdav"
+
 	"github.com/err0r500/go-solid-server/tokenStorer"
 
 	"github.com/err0r500/go-solid-server/cookies"
@@ -38,6 +40,7 @@ func NewServer(config domain.ServerConfig) *Server {
 		pathInformer:  pathInfo.New(config),
 		rdfHandler:    encoder.RdfEncoder{},
 		tokenStorer:   tokenStorer.New(config.BoltPath),
+		webdavHandler: webdav.New(config.DataRoot),
 		//webdav: &webdav.Handler{
 		//	FileSystem: webdav.Dir(config.DataRoot),
 		//	LockSystem: webdav.NewMemLS(),

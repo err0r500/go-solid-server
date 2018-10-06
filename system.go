@@ -266,7 +266,7 @@ func validateRecoveryToken(w http.ResponseWriter, req *httpRequest, s *Server) S
 		return SystemReturn{Status: 500, Body: err.Error()}
 	}
 	value := make(map[string]string)
-	err = s.cookie.Decode("Recovery", token, &value)
+	err = s.cookieManager.Decode("Recovery", token, &value)
 	if err != nil {
 		s.debug.Println("Decoding err: " + err.Error())
 		return SystemReturn{Status: 500, Body: err.Error()}

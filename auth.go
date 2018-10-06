@@ -90,7 +90,7 @@ func (srv *Server) userCookieSet(w http.ResponseWriter, user string) error {
 		"user": user,
 	}
 
-	encoded, err := srv.cookie.Encode("Session", value)
+	encoded, err := srv.cookieManager.Encode("Session", value)
 	if err != nil {
 		return err
 	}
@@ -206,7 +206,7 @@ func NewTokenValues() map[string]string {
 func (s *Server) NewSecureToken(tokenType string, values map[string]string, duration time.Duration) (string, error) {
 	valid := time.Now().Add(duration).Unix()
 	values["valid"] = fmt.Sprintf("%d", valid)
-	token, err := s.cookie.Encode(tokenType, values)
+	token, err := s.cookieManager.Encode(tokenType, values)
 	if err != nil {
 		s.debug.Println("Error encoding new token: " + err.Error())
 		return "", err
@@ -217,7 +217,7 @@ func (s *Server) NewSecureToken(tokenType string, values map[string]string, dura
 // ValidateSecureToken returns the values of a secure cookie
 func (s *Server) ValidateSecureToken(tokenType string, token string) (map[string]string, error) {
 	values := make(map[string]string)
-	err := s.cookie.Decode(tokenType, token, &values)
+	err := s.cookieManager.Decode(tokenType, token, &values)
 	if err != nil {
 		s.debug.Println("Secure token decoding error: " + err.Error())
 		return values, err
@@ -233,7 +233,7 @@ func (s *Server) GetValuesFromToken(tokenType string, token string, req *httpReq
 		s.debug.Println("Token URL decoding error for type: " + tokenType + " : " + err.Error())
 		return values, err
 	}
-	err = s.cookie.Decode(tokenType, token, &values)
+	err = s.cookieManager.Decode(tokenType, token, &values)
 	if err != nil {
 		s.debug.Println("Token decoding error for type: " + tokenType + " \nToken: " + token + "\n" + err.Error())
 		return values, err

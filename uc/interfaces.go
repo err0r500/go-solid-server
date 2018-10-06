@@ -71,3 +71,9 @@ type ACL interface {
 	AllowControl(path string) (int, error)
 	VerifyDelegator(delegator string, delegatee string) bool
 }
+
+type CookieManager interface {
+	Encode(name string, value interface{}) (string, error)
+	Decode(name, value string, dst interface{}) error
+	Check(string) error
+}

@@ -17,6 +17,8 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/err0r500/go-solid-server/cookies"
+
 	"github.com/err0r500/go-solid-server/encoder"
 
 	"github.com/err0r500/go-solid-server/domain"
@@ -24,7 +26,6 @@ import (
 	"github.com/err0r500/go-solid-server/uc"
 
 	"github.com/boltdb/bolt"
-	"github.com/gorilla/securecookie"
 	"golang.org/x/net/webdav"
 )
 
@@ -63,13 +64,12 @@ var (
 type Server struct {
 	http.Handler
 
-	Config     domain.ServerConfig
-	cookie     *securecookie.SecureCookie
-	cookieSalt []byte
-	debug      *log.Logger
-	webdav     *webdav.Handler
-	BoltDB     *bolt.DB
+	Config domain.ServerConfig
+	debug  *log.Logger
+	webdav *webdav.Handler
+	BoltDB *bolt.DB
 
+	cookieManager  uc.CookieManager
 	templater      uc.Templater
 	mailer         uc.Mailer
 	uriManipulator uc.URIManipulator
@@ -86,10 +86,7 @@ type httpRequest struct {
 	ContentType string
 	User        string
 	IsOwner     bool
-	//uriManipulator uc.URIManipulator
-	wac WAC
-	//httpCaller     uc.HttpCaller
-	//rdfHandler     encoder.RdfEncoder
+	wac         WAC
 }
 
 func (req httpRequest) BaseURI() string {
@@ -171,13 +168,12 @@ func (s Server) handleStatusText(status int, err error) string {
 // NewServer is used to create a new Server instance
 func NewServer(config domain.ServerConfig) *Server {
 	s := &Server{
-		Config:     config,
-		cookie:     securecookie.New(securecookie.GenerateRandomKey(32), securecookie.GenerateRandomKey(32)),
-		cookieSalt: securecookie.GenerateRandomKey(8),
+		Config: config,
 		webdav: &webdav.Handler{
 			FileSystem: webdav.Dir(config.DataRoot),
 			LockSystem: webdav.NewMemLS(),
 		},
+		cookieManager: cookies.New(),
 	}
 	mime.AddRDFExtension(s.Config.ACLSuffix)
 	mime.AddRDFExtension(s.Config.MetaSuffix)

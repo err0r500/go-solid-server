@@ -120,8 +120,8 @@ func (s *Server) WebIDDigestAuth(req *httpRequest) (string, error) {
 	if len(tValues["secret"]) == 0 {
 		return "", errors.New("Missing secret from token (tempered with?)")
 	}
-	if tValues["secret"] != string(s.cookieSalt) {
-		return "", errors.New("Wrong secret value in client token!")
+	if err := s.cookieManager.Check(tValues["secret"]); err != nil {
+		return "", err
 	}
 
 	g := domain.NewGraph(authH.Username)

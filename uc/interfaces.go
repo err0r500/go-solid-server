@@ -89,9 +89,13 @@ type TokenStorer interface {
 }
 
 type WebDavHandler interface {
-	ServeHTTP(w http.ResponseWriter, r *http.Request)
+	HandleReq(w http.ResponseWriter, r *http.Request)
 }
 
 type Debug interface {
 	Debug(v ...interface{})
+}
+
+type SparqlHandler interface {
+	SPARQLUpdate(g *domain.Graph, reader io.Reader) (int, error)
 }

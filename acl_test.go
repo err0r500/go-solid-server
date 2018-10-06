@@ -972,7 +972,7 @@ package gold_test
 //	sparqlData := `INSERT DATA { <` + user1 + `> <http://www.w3.org/ns/auth/acl#delegates> <` + user2 + `> . }`
 //	request, err := http.NewRequest("PATCH", user1, strings.NewReader(sparqlData))
 //	assert.NoError(t, err)
-//	request.Header.Add("Content-Type", "application/sparql-update")
+//	request.Header.Add("Content-Type", constant.ApplicationSPAQLUpdate)
 //	response, err := user1h.Do(request)
 //	assert.NoError(t, err)
 //	response.Body.Close()

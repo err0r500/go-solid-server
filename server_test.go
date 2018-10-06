@@ -734,14 +734,14 @@ func TestGraphPatch(t *testing.T) {
 //func TestPOSTSPARQL(t *testing.T) {
 //	request, err := http.NewRequest("POST", testServer.URL+"/_test/abc", strings.NewReader("INSERT DATA { <a> <b> <c>, <c0> . }"))
 //	assert.NoError(t, err)
-//	request.Header.Add("Content-Type", "application/sparql-update")
+//	request.Header.Add("Content-Type", constant.ApplicationSPARQLUpdate)
 //	response, err := httpClient.Do(request)
 //	assert.NoError(t, err)
 //	assert.Equal(t, 200, response.StatusCode)
 //
 //	request, err = http.NewRequest("POST", testServer.URL+"/_test/abc", strings.NewReader("DELETE DATA { <a> <b> <c> . }"))
 //	assert.NoError(t, err)
-//	request.Header.Add("Content-Type", "application/sparql-update")
+//	request.Header.Add("Content-Type", constant.ApplicationSPARQLUpdate)
 //	response, err = httpClient.Do(request)
 //	assert.NoError(t, err)
 //	assert.Equal(t, 200, response.StatusCode)
@@ -795,7 +795,7 @@ func TestGraphPatch(t *testing.T) {
 //func TestPATCHSPARQL(t *testing.T) {
 //	request, err := http.NewRequest("PATCH", testServer.URL+"/_test/abc", strings.NewReader(""))
 //	assert.NoError(t, err)
-//	request.Header.Add("Content-Type", "application/sparql-update")
+//	request.Header.Add("Content-Type", constant.ApplicationSPARQLUpdate)
 //	response, err := httpClient.Do(request)
 //	assert.NoError(t, err)
 //	body, err := ioutil.ReadAll(response.Body)
@@ -806,7 +806,7 @@ func TestGraphPatch(t *testing.T) {
 //	sparqlData := `INSERT DATA { <http://a.com> <http://b.com> <http://c.com> . } ; INSERT DATA { <http://a.com> <http://b.com> "123"^^<http://www.w3.org/2001/XMLSchema#int> . }`
 //	request, err = http.NewRequest("PATCH", testServer.URL+"/_test/abc", strings.NewReader(sparqlData))
 //	assert.NoError(t, err)
-//	request.Header.Add("Content-Type", "application/sparql-update")
+//	request.Header.Add("Content-Type", constant.ApplicationSPARQLUpdate)
 //	response, err = httpClient.Do(request)
 //	assert.NoError(t, err)
 //	body, err = ioutil.ReadAll(response.Body)
@@ -821,7 +821,7 @@ func TestGraphPatch(t *testing.T) {
 //	sparqlData = `DELETE DATA { <http://a.com> <http://b.com> <http://c.com>  . }; DELETE DATA { <http://a.com> <http://b.com> "123"^^<http://www.w3.org/2001/XMLSchema#int> . }`
 //	request, err = http.NewRequest("PATCH", testServer.URL+"/_test/abc", strings.NewReader(sparqlData))
 //	assert.NoError(t, err)
-//	request.Header.Add("Content-Type", "application/sparql-update")
+//	request.Header.Add("Content-Type", constant.ApplicationSPARQLUpdate)
 //	response, err = httpClient.Do(request)
 //	assert.NoError(t, err)
 //	body, err = ioutil.ReadAll(response.Body)
@@ -838,7 +838,7 @@ func TestGraphPatch(t *testing.T) {
 //	sparqlData := `I { <a> <b> <c> . }`
 //	request, err := http.NewRequest("PATCH", testServer.URL+"/_test/abc", strings.NewReader(sparqlData))
 //	assert.NoError(t, err)
-//	request.Header.Add("Content-Type", "application/sparql-update")
+//	request.Header.Add("Content-Type", constant.ApplicationSPARQLUpdate)
 //	response, err := httpClient.Do(request)
 //	assert.NoError(t, err)
 //	assert.Equal(t, 200, response.StatusCode)
@@ -853,7 +853,7 @@ func TestGraphPatch(t *testing.T) {
 //
 //	request, err := http.NewRequest("PATCH", testServer.URL+"/"+file, strings.NewReader(sparqlData))
 //	assert.NoError(t, err)
-//	request.Header.Add("Content-Type", "application/sparql-update")
+//	request.Header.Add("Content-Type", constant.ApplicationSPARQLUpdate)
 //	response, err := httpClient.Do(request)
 //	assert.NoError(t, err)
 //	assert.Equal(t, 200, response.StatusCode)

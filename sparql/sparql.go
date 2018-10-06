@@ -1,0 +1,5 @@
+package sparql
+
+func Update() {
+
+}

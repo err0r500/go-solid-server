@@ -1,4 +1,4 @@
-package gold
+package sparql
 
 import (
 	"bytes"
@@ -15,32 +15,46 @@ import (
 	"github.com/err0r500/go-solid-server/uc"
 )
 
-// SPARQLUpdateQuery contains a verb, the body of the query and the graph
-type SPARQLUpdateQuery struct {
+type sparqlHandler struct{}
+
+func New() uc.SparqlHandler {
+	return sparqlHandler{}
+}
+
+func (sparql sparqlHandler) SPARQLUpdate(g *domain.Graph, body io.Reader) (int, error) {
+	s := sparql.newSPARQLUpdate(g.URI())
+	if err := s.Parse(body); err != nil {
+		return 0, err
+	}
+	return s.update(g)
+}
+
+// updater contains the base URI and a list of queries
+type updater struct {
+	baseURI string
+	queries []sparqlUpdateQuery
+	parser  uc.Encoder
+}
+
+// sparqlUpdateQuery contains a verb, the body of the query and the graph
+type sparqlUpdateQuery struct {
 	verb string
 	body string
 
 	graph domain.Graph
 }
 
-// SPARQLUpdate contains the base URI and a list of queries
-type SPARQLUpdate struct {
-	baseURI string
-	queries []SPARQLUpdateQuery
-	parser  uc.Encoder
-}
-
-// NewSPARQLUpdate creates a new SPARQL object
-func NewSPARQLUpdate(baseURI string) *SPARQLUpdate {
-	return &SPARQLUpdate{
+// newSPARQLUpdate creates a new SPARQL object
+func (sparqlHandler) newSPARQLUpdate(baseURI string) *updater {
+	return &updater{
 		baseURI: baseURI,
-		queries: []SPARQLUpdateQuery{},
+		queries: []sparqlUpdateQuery{},
 		parser:  encoder.New(),
 	}
 }
 
 // Parse parses a SPARQL query from the reader
-func (sparql *SPARQLUpdate) Parse(src io.Reader) error {
+func (sparql *updater) Parse(src io.Reader) error {
 	b, _ := ioutil.ReadAll(src)
 	s := new(scanner.Scanner).Init(bytes.NewReader(b))
 	s.Mode = scanner.ScanIdents | scanner.ScanStrings
@@ -68,7 +82,7 @@ func (sparql *SPARQLUpdate) Parse(src io.Reader) error {
 		case 125: // }
 			level--
 			if level == 0 {
-				query := SPARQLUpdateQuery{
+				query := sparqlUpdateQuery{
 					body:  string(b[start+1 : s.Position.Offset]),
 					graph: *domain.NewGraph(sparql.baseURI),
 					verb:  verb,
@@ -89,9 +103,9 @@ func (sparql *SPARQLUpdate) Parse(src io.Reader) error {
 	return nil
 }
 
-// SPARQLUpdate is used to update a graph from a SPARQL query
+// updater is used to updater a graph from a SPARQL query
 // Ugly, needs to be improved
-func (sparql *SPARQLUpdate) SPARQLUpdate(g *domain.Graph) (int, error) {
+func (sparql *updater) update(g *domain.Graph) (int, error) {
 	for _, query := range sparql.queries {
 		if query.verb == "DELETE" || query.verb == "DELETE DATA" {
 			for pattern := range query.graph.IterTriples() {

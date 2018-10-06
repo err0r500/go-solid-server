@@ -20,6 +20,6 @@ func New(dataRoot string) uc.WebDavHandler {
 	}
 }
 
-func (s webdavserver) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+func (s webdavserver) HandleReq(w http.ResponseWriter, r *http.Request) {
 	s.handler.ServeHTTP(w, r)
 }

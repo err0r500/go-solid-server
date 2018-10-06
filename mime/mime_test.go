@@ -11,7 +11,7 @@ package mime
 //var (
 //	mimeParserExpect = map[string]string{
 //		// constant.ApplicationJSON:          "internal",
-//		"application/sparql-update": "internal",
+//		constant.ApplicationSPAQLUpdate: "internal",
 //
 //		"application/ld+json": "jsonld",
 //		"application/rdf+xml": "rdfxml",

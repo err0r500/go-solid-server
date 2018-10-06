@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
-	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -30,85 +29,18 @@ type Server struct {
 	Config domain.ServerConfig
 
 	cookieManager  uc.CookieManager
-	logger         uc.Debug // fixme abstract logging
+	logger         uc.Debug
 	fileHandler    uc.FilesHandler
 	httpCaller     uc.HttpCaller
 	mailer         uc.Mailer
 	pathInformer   uc.PathInformer
 	parser         uc.Encoder
 	rdfHandler     encoder.RdfEncoder // fixme : remove this one
+	sparqlHandler  uc.SparqlHandler
 	templater      uc.Templater
 	tokenStorer    uc.TokenStorer
 	uriManipulator uc.URIManipulator
 	webdavHandler  uc.WebDavHandler
-}
-
-type httpRequest struct { // fixme attempt to make it purely abstract
-	*http.Request
-	AcceptType  string
-	ContentType string
-	User        string
-	IsOwner     bool
-	wac         WAC
-}
-
-func (req httpRequest) BaseURI() string {
-	scheme := "http"
-	if req.TLS != nil || req.Header.Get("X-Forwarded-Proto") == "https" {
-		scheme += "s"
-	}
-	reqHost := req.Host
-	if len(req.Header.Get("X-Forward-Host")) > 0 {
-		reqHost = req.Header.Get("X-Forward-Host")
-	}
-	host, port, err := net.SplitHostPort(reqHost)
-	if err != nil {
-		host = reqHost
-	}
-	if len(host) == 0 {
-		host = "localhost"
-	}
-	if len(port) > 0 {
-		port = ":" + port
-	}
-	if (scheme == "https" && port == ":443") || (scheme == "http" && port == ":80") {
-		port = ""
-	}
-	return scheme + "://" + host + port + req.URL.Path
-}
-
-func (req httpRequest) ifMatch(etag string) bool {
-	if len(etag) == 0 {
-		return true
-	}
-	if len(req.Header.Get("If-Match")) == 0 {
-		return true
-	}
-	val := strings.Split(req.Header.Get("If-Match"), ",")
-	for _, v := range val {
-		v = strings.TrimSpace(v)
-		if v == "*" || v == etag {
-			return true
-		}
-	}
-	return false
-}
-
-func (req httpRequest) ifNoneMatch(etag string) bool {
-	if len(etag) == 0 {
-		return true
-	}
-	if len(req.Header.Get("If-None-Match")) == 0 {
-		return true
-	}
-	val := strings.Split(req.Header.Get("If-None-Match"), ",")
-	for _, v := range val {
-		v = strings.TrimSpace(v)
-		if v != "*" && v != etag {
-			return true
-		}
-	}
-	return false
 }
 
 func (s Server) handleStatusText(status int, err error) string {
@@ -131,8 +63,7 @@ func (s Server) handleStatusText(status int, err error) string {
 type response struct {
 	status  int
 	headers http.Header
-
-	argv []interface{}
+	argv    []interface{}
 }
 
 func (r *response) respond(status int, a ...interface{}) *response {
@@ -599,11 +530,8 @@ func (s *Server) Patch(w http.ResponseWriter, req *httpRequest, resource *domain
 		switch dataMime {
 		case constant.ApplicationJSON:
 			s.JSONPatch(g, body)
-		case "application/sparql-update":
-			sparql := NewSPARQLUpdate(g.URI())
-			sparql.Parse(body)
-			ecode, err := sparql.SPARQLUpdate(g)
-			if err != nil {
+		case constant.ApplicationSPARQLUpdate:
+			if ecode, err := s.sparqlHandler.SPARQLUpdate(g, body); err != nil {
 				return r.respond(ecode, "Error processing SPARQL Update: "+err.Error())
 			}
 		default:
@@ -814,12 +742,8 @@ func (s Server) Post(w http.ResponseWriter, req *httpRequest, resource *domain.P
 			switch dataMime {
 			case constant.ApplicationJSON:
 				s.JSONPatch(g, req.Body)
-			case "application/sparql-update":
-				sparql := NewSPARQLUpdate(g.URI())
-				sparql.Parse(req.Body)
-				ecode, err := sparql.SPARQLUpdate(g)
-				if err != nil {
-					println(err.Error())
+			case constant.ApplicationSPARQLUpdate:
+				if ecode, err := s.sparqlHandler.SPARQLUpdate(g, req.Body); err != nil {
 					return r.respond(ecode, "Error processing SPARQL Update: "+err.Error())
 				}
 			default:
@@ -1019,7 +943,7 @@ func (s *Server) CopyMoveLockUnlock(w http.ResponseWriter, req *httpRequest, res
 		return r.respond(respCode, s.handleStatusText(respCode, err))
 	}
 
-	s.webdavHandler.ServeHTTP(w, req.Request)
+	s.webdavHandler.HandleReq(w, req.Request)
 	return nil // should not happen
 }
 

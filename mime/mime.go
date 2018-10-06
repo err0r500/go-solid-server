@@ -21,9 +21,9 @@ var MimeSerializer = map[string]string{
 }
 
 var MimeParser = map[string]string{
-	"application/ld+json":       "jsonld",
-	constant.ApplicationJSON:    "internal",
-	"application/sparql-update": "internal",
+	"application/ld+json":            "jsonld",
+	constant.ApplicationJSON:         "internal",
+	constant.ApplicationSPARQLUpdate: "internal",
 }
 
 var MimeRdfExt = map[string]string{

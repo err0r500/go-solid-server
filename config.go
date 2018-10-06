@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/err0r500/go-solid-server/tokenStorer"
+
 	"github.com/err0r500/go-solid-server/cookies"
 	"github.com/err0r500/go-solid-server/domain"
 	"github.com/err0r500/go-solid-server/encoder"
@@ -27,19 +29,20 @@ func NewServer(config domain.ServerConfig) *Server {
 	}
 
 	s := &Server{
-		Config: config,
+		Config:        config,
+		cookieManager: cookies.New(),
+		debug:         debugger,
+		fileHandler:   resources.New(encoder.New()),
+		httpCaller:    httpCaller.New(),
+		mailer:        mail.New(domain.EmailConfig{}),
+		parser:        encoder.New(),
+		pathInformer:  pathInfo.New(config),
+		rdfHandler:    encoder.RdfEncoder{},
+		tokenStorer:   tokenStorer.New(config.BoltPath),
 		webdav: &webdav.Handler{
 			FileSystem: webdav.Dir(config.DataRoot),
 			LockSystem: webdav.NewMemLS(),
 		},
-		debug:         debugger,
-		cookieManager: cookies.New(),
-		fileHandler:   resources.New(encoder.New()),
-		mailer:        mail.New(domain.EmailConfig{}),
-		parser:        encoder.New(),
-		pathInformer:  pathInfo.New(config),
-		httpCaller:    httpCaller.New(),
-		rdfHandler:    encoder.RdfEncoder{},
 	}
 
 	mime.AddRDFExtension(s.Config.ACLSuffix)

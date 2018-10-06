@@ -2,10 +2,8 @@ package gold
 
 import (
 	"crypto/rsa"
-	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io/ioutil"
 	"net"
@@ -13,13 +11,11 @@ import (
 	"net/url"
 	"os"
 	_path "path"
-	"path/filepath"
 	"strings"
 	"time"
 
 	"github.com/err0r500/go-solid-server/constant"
 
-	"github.com/boltdb/bolt"
 	"github.com/err0r500/go-solid-server/domain"
 )
 
@@ -173,10 +169,10 @@ func (s *Server) logIn(w http.ResponseWriter, req *httpRequest) SystemReturn {
 func loginRedirect(w http.ResponseWriter, req *httpRequest, s *Server, values map[string]string, redirTo string) SystemReturn {
 	key := ""
 	// try to get existing token
-	key, err := s.getTokenByOrigin(constant.HAuthorization, req.Host, values["origin"])
+	key, err := s.tokenStorer.GetTokenByOrigin(constant.HAuthorization, req.Host, values["origin"])
 	if err != nil || len(key) == 0 {
 		s.debug.Println("Could not find a token for origin:", values["origin"])
-		key, err = s.newPersistedToken(constant.HAuthorization, req.Host, values)
+		key, err = s.tokenStorer.NewPersistedToken(constant.HAuthorization, req.Host, values)
 		if err != nil {
 			s.debug.Println("Could not generate authorization token for " + values["webid"] + ", err: " + err.Error())
 			return SystemReturn{Status: 500, Body: "Could not generate auth token for " + values["webid"] + ", err: " + err.Error()}
@@ -708,14 +704,14 @@ func accountTokens(w http.ResponseWriter, req *httpRequest, s *Server) SystemRet
 
 	if len(req.FormValue("revokeAuthz")) > 0 {
 		delStatus := "<p style=\"color: green;\">Successfully revoked token!</p>"
-		err := s.deletePersistedToken(constant.HAuthorization, req.Host, req.FormValue("revokeAuthz"))
+		err := s.tokenStorer.DeletePersistedToken(constant.HAuthorization, req.Host, req.FormValue("revokeAuthz"))
 		if err != nil {
 			delStatus = "<p>Could not revoke token. Error: " + err.Error() + "</p>"
 		}
 		tokensHtml += delStatus
 	}
 
-	tokens, err := s.getTokensByType(constant.HAuthorization, req.Host)
+	tokens, err := s.tokenStorer.GetTokensByType(constant.HAuthorization, req.Host)
 	tokensHtml += "<h2>HAuthorization tokens for applications</h2>\n"
 	tokensHtml += "<div>"
 	if err == nil {
@@ -733,157 +729,4 @@ func accountTokens(w http.ResponseWriter, req *httpRequest, s *Server) SystemRet
 	tokensHtml += "</div>"
 
 	return SystemReturn{Status: 200, Body: s.templater.TokensTemplate(tokensHtml)}
-}
-
-// DiskUsage returns the total size occupied by dir and contents
-func DiskUsage(dirPath string) (int64, error) {
-	var totalSize int64
-	walkpath := func(path string, f os.FileInfo, err error) error {
-		if err == nil && f != nil {
-			totalSize += f.Size()
-		}
-		return err
-	}
-	err := filepath.Walk(dirPath, walkpath)
-	return totalSize, err
-}
-
-func (s *Server) StartBolt() error {
-	var err error
-	s.BoltDB, err = bolt.Open(s.Config.BoltPath, 0644, nil)
-	if err != nil {
-		return err
-	}
-	return nil
-}
-
-// NewToken saves an API token to the bolt db. It returns the API token and a possible error
-func (s *Server) newPersistedToken(tokenType, host string, values map[string]string) (string, error) {
-	var token string
-	if len(tokenType) == 0 || len(host) == 0 {
-		return token, errors.New("Can't retrieve token from db. Missing values for token or host.")
-	}
-	// bucket(host) -> bucket(type) -> values
-	err := s.BoltDB.Update(func(tx *bolt.Tx) error {
-		userBucket, err := tx.CreateBucketIfNotExists([]byte(host))
-		if err != nil {
-			return err
-		}
-		bucket, err := userBucket.CreateBucketIfNotExists([]byte(tokenType))
-		id, _ := bucket.NextSequence()
-		values["id"] = fmt.Sprintf("%d", id)
-		// set validity if not alreay set
-		if len(values["valid"]) == 0 {
-			// age times the duration of 6 month
-			values["valid"] = fmt.Sprintf("%d",
-				time.Now().Add(time.Duration(s.Config.TokenAge)*time.Hour*5040).Unix())
-		}
-		// marshal values to JSON
-		tokenJson, err := json.Marshal(values)
-		if err != nil {
-			return err
-		}
-		token = fmt.Sprintf("%x", sha256.Sum256(tokenJson))
-		err = bucket.Put([]byte(token), tokenJson)
-		if err != nil {
-			return err
-		}
-
-		return nil
-	})
-
-	return token, err
-}
-
-func (s *Server) getPersistedToken(tokenType, host, token string) (map[string]string, error) {
-	tokenValues := map[string]string{}
-	if len(tokenType) == 0 || len(host) == 0 || len(token) == 0 {
-		return tokenValues, errors.New("Can't retrieve token from db. tokenType, host and token value are requrired.")
-	}
-	err := s.BoltDB.View(func(tx *bolt.Tx) error {
-		userBucket := tx.Bucket([]byte(host))
-		if userBucket == nil {
-			return errors.New(host + " bucket not found!")
-		}
-		bucket := userBucket.Bucket([]byte(tokenType))
-		if bucket == nil {
-			return errors.New(tokenType + " bucket not found!")
-		}
-
-		// unmarshal
-		b := bucket.Get([]byte(token))
-		err := json.Unmarshal(b, &tokenValues)
-		return err
-	})
-	return tokenValues, err
-}
-
-func (s *Server) getTokenByOrigin(tokenType, host, origin string) (string, error) {
-	token := ""
-	if len(tokenType) == 0 || len(host) == 0 || len(origin) == 0 {
-		return token, errors.New("Can't retrieve token from db. tokenType, host and token value are requrired.")
-	}
-	s.debug.Println("Checking existing tokens for host:", host, "and origin:", origin)
-	err := s.BoltDB.View(func(tx *bolt.Tx) error {
-		userBucket := tx.Bucket([]byte(host))
-		if userBucket == nil {
-			return errors.New(host + " bucket not found!")
-		}
-		bucket := userBucket.Bucket([]byte(tokenType))
-		if bucket == nil {
-			return errors.New(tokenType + " bucket not found!")
-		}
-
-		// unmarshal
-		c := bucket.Cursor()
-
-		for k, _ := c.First(); k != nil; k, _ = c.Next() {
-			key := string(k)
-			values, err := s.getPersistedToken(tokenType, host, key)
-			if err == nil && values["origin"] == origin {
-				token = key
-				break
-			}
-		}
-
-		return nil
-	})
-	return token, err
-}
-
-func (s *Server) deletePersistedToken(tokenType, host, token string) error {
-	if len(tokenType) == 0 || len(host) == 0 || len(token) == 0 {
-		return errors.New("Can't retrieve token from db. tokenType, host and token value are requrired.")
-	}
-	err := s.BoltDB.Update(func(tx *bolt.Tx) error {
-		return tx.Bucket([]byte(host)).Bucket([]byte(tokenType)).Delete([]byte(token))
-	})
-	return err
-}
-
-func (s *Server) getTokensByType(tokenType, host string) (map[string]map[string]string, error) {
-	tokens := make(map[string]map[string]string)
-	err := s.BoltDB.View(func(tx *bolt.Tx) error {
-		// Assume bucket exists and has keys
-		b := tx.Bucket([]byte(host))
-		if b == nil {
-			return errors.New("No bucket for host " + host)
-		}
-		ba := b.Bucket([]byte(tokenType))
-		if ba == nil {
-			return errors.New("No bucket for type " + tokenType)
-		}
-
-		c := ba.Cursor()
-
-		for k, _ := c.First(); k != nil; k, _ = c.Next() {
-			key := string(k)
-			token, err := s.getPersistedToken(tokenType, host, key)
-			if err == nil {
-				tokens[key] = token
-			}
-		}
-		return nil
-	})
-	return tokens, err
 }

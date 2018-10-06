@@ -25,7 +25,6 @@ import (
 	"github.com/err0r500/go-solid-server/mime"
 	"github.com/err0r500/go-solid-server/uc"
 
-	"github.com/boltdb/bolt"
 	"golang.org/x/net/webdav"
 )
 
@@ -38,7 +37,6 @@ var (
 type Server struct {
 	http.Handler
 
-	BoltDB         *bolt.DB // fixme abstract storage
 	Config         domain.ServerConfig
 	cookieManager  uc.CookieManager
 	debug          *log.Logger // fixme abstract logging
@@ -49,11 +47,12 @@ type Server struct {
 	parser         uc.Encoder
 	rdfHandler     encoder.RdfEncoder // fixme : remove this one
 	templater      uc.Templater
+	tokenStorer    uc.TokenStorer
 	uriManipulator uc.URIManipulator
 	webdav         *webdav.Handler // fixme move elsewhere ?
 }
 
-type httpRequest struct {
+type httpRequest struct { // fixme attempt to make it purely abstract
 	*http.Request
 	AcceptType  string
 	ContentType string

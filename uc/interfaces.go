@@ -78,3 +78,11 @@ type CookieManager interface {
 	Decode(name, value string, dst interface{}) error
 	Check(string) error
 }
+
+type TokenStorer interface {
+	NewPersistedToken(tokenType, host string, values map[string]string) (string, error)
+	GetPersistedToken(tokenType, host, token string) (map[string]string, error)
+	GetTokenByOrigin(tokenType, host, origin string) (string, error)
+	GetTokensByType(tokenType, host string) (map[string]map[string]string, error)
+	DeletePersistedToken(tokenType, host, token string) error
+}

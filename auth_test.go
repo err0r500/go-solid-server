@@ -176,7 +176,7 @@ package gold
 //	authHeader := `WebID-RSA source="` + p.Source + `", username="` + user1 + `", nonce="` + p.Nonce + `", sig="` + b64Sig + `"`
 //
 //	request, err = http.NewRequest("GET", testServer.URL+aclDir+"abc", nil)
-//	request.Header.Add("Authorization", authHeader)
+//	request.Header.Add(constant.Authorization, authHeader)
 //	assert.NoError(t, err)
 //	response, err = httpClient.Do(request)
 //	assert.NoError(t, err)
@@ -213,7 +213,7 @@ package gold
 //	authHeader := `WebID-RSA source="http://baddude.org/", username="` + user1 + `", nonce="` + p.Nonce + `", sig="` + b64Sig + `"`
 //
 //	request, err = http.NewRequest("GET", testServer.URL+aclDir+"abc", nil)
-//	request.Header.Add("Authorization", authHeader)
+//	request.Header.Add(constant.Authorization, authHeader)
 //	assert.NoError(t, err)
 //	response, err = httpClient.Do(request)
 //	assert.NoError(t, err)

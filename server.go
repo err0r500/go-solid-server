@@ -17,7 +17,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/err0r500/go-solid-server/cookies"
+	"github.com/err0r500/go-solid-server/constant"
 
 	"github.com/err0r500/go-solid-server/encoder"
 
@@ -29,55 +29,28 @@ import (
 	"golang.org/x/net/webdav"
 )
 
-const (
-	// HCType is the header Content-Type
-	HCType = "Content-Type"
-	// SystemPrefix is the generic name for the system-reserved namespace (e.g. APIs)
-	SystemPrefix = ",account"
-	// LoginEndpoint is the link to the login page
-	LoginEndpoint = SystemPrefix + "/login"
-	// ProxyPath provides CORS proxy (empty to disable)
-	ProxyPath = ",proxy"
-	// QueryPath provides link-following support for twinql
-	QueryPath = ",query"
-	// AgentPath is the path to the agent's WebID profile
-	AgentPath = ",agent"
-	// RDFExtension is the default extension for RDF documents (i.e. turtle for now)
-	RDFExtension = ".ttl"
-)
-
 var (
-	// Streaming (stream data or not)
-	Streaming = false // experimental
-
 	debugFlags  = log.Flags() | log.Lshortfile
 	debugPrefix = "[debug] "
-
-	methodsAll = []string{
-		"OPTIONS", "HEAD", "GET",
-		"PATCH", "POST", "PUT", "MKCOL", "DELETE",
-		"COPY", "MOVE", "LOCK", "UNLOCK",
-	}
 )
 
 // Server object contains http handler, root where the data is found and whether it uses vhosts or not
 type Server struct {
 	http.Handler
 
-	Config domain.ServerConfig
-	debug  *log.Logger
-	webdav *webdav.Handler
-	BoltDB *bolt.DB
-
+	BoltDB         *bolt.DB // fixme abstract storage
+	Config         domain.ServerConfig
 	cookieManager  uc.CookieManager
-	templater      uc.Templater
-	mailer         uc.Mailer
-	uriManipulator uc.URIManipulator
+	debug          *log.Logger // fixme abstract logging
 	fileHandler    uc.FilesHandler
+	httpCaller     uc.HttpCaller
+	mailer         uc.Mailer
+	pathInformer   uc.PathInformer
 	parser         uc.Encoder
 	rdfHandler     encoder.RdfEncoder // fixme : remove this one
-	pathInformer   uc.PathInformer
-	httpCaller     uc.HttpCaller
+	templater      uc.Templater
+	uriManipulator uc.URIManipulator
+	webdav         *webdav.Handler // fixme move elsewhere ?
 }
 
 type httpRequest struct {
@@ -165,28 +138,6 @@ func (s Server) handleStatusText(status int, err error) string {
 	}
 }
 
-// NewServer is used to create a new Server instance
-func NewServer(config domain.ServerConfig) *Server {
-	s := &Server{
-		Config: config,
-		webdav: &webdav.Handler{
-			FileSystem: webdav.Dir(config.DataRoot),
-			LockSystem: webdav.NewMemLS(),
-		},
-		cookieManager: cookies.New(),
-	}
-	mime.AddRDFExtension(s.Config.ACLSuffix)
-	mime.AddRDFExtension(s.Config.MetaSuffix)
-	if config.Debug {
-		s.debug = log.New(os.Stderr, debugPrefix, debugFlags)
-	} else {
-		s.debug = log.New(ioutil.Discard, "", 0)
-	}
-	s.debug.Println("---- starting server ----")
-	s.debug.Printf("config: %#v\n", s.Config)
-	return s
-}
-
 type response struct {
 	status  int
 	headers http.Header
@@ -266,7 +217,7 @@ func (s *Server) Options(w http.ResponseWriter, req *httpRequest, resource *doma
 	if len(corsReqM) > 0 {
 		w.Header().Set("Access-Control-Allow-Methods", strings.Join(corsReqM, ", "))
 	} else {
-		w.Header().Set("Access-Control-Allow-Methods", strings.Join(methodsAll, ", "))
+		w.Header().Set("Access-Control-Allow-Methods", strings.Join(constant.AllMethods(), ", "))
 	}
 
 	// set LDP Link headers
@@ -276,8 +227,8 @@ func (s *Server) Options(w http.ResponseWriter, req *httpRequest, resource *doma
 	w.Header().Add("Link", s.uriManipulator.Brack("http://www.w3.org/ns/ldp#Resource")+"; rel=\"type\"")
 
 	// set API Link headers
-	w.Header().Add("Link", s.uriManipulator.Brack(resource.Base+"/"+SystemPrefix+"/login")+"; rel=\"http://www.w3.org/ns/solid/terms#loginEndpoint\"")
-	w.Header().Add("Link", s.uriManipulator.Brack(resource.Base+"/"+SystemPrefix+"/logout")+"; rel=\"http://www.w3.org/ns/solid/terms#logoutEndpoint\"")
+	w.Header().Add("Link", s.uriManipulator.Brack(resource.Base+"/"+constant.SystemPrefix+"/login")+"; rel=\"http://www.w3.org/ns/solid/terms#loginEndpoint\"")
+	w.Header().Add("Link", s.uriManipulator.Brack(resource.Base+"/"+constant.SystemPrefix+"/logout")+"; rel=\"http://www.w3.org/ns/solid/terms#logoutEndpoint\"")
 	w.Header().Add("Link", s.uriManipulator.Brack(resource.Base+"/,query")+"; rel=\"http://www.w3.org/ns/solid/terms#twinqlEndpoint\"")
 	w.Header().Add("Link", s.uriManipulator.Brack(resource.Base+"/,proxy?uri=")+"; rel=\"http://www.w3.org/ns/solid/terms#proxyEndpoint\"")
 
@@ -321,7 +272,7 @@ func (s Server) GetHead(w http.ResponseWriter, req *httpRequest, resource *domai
 
 	// First redirect to path + trailing slash if it's missing
 	if resource.IsDir && glob == false && !strings.HasSuffix(req.BaseURI(), "/") {
-		w.Header().Set(HCType, contentType)
+		w.Header().Set(constant.HCType, contentType)
 		urlStr := resource.URI
 		s.debug.Println("Redirecting to", urlStr)
 		http.Redirect(w, req.Request, urlStr, 301)
@@ -332,9 +283,9 @@ func (s Server) GetHead(w http.ResponseWriter, req *httpRequest, resource *domai
 	w.Header().Set("Link", s.uriManipulator.Brack(resource.AclURI)+"; rel=\"acl\", "+s.uriManipulator.Brack(resource.MetaURI)+"; rel=\"meta\"")
 
 	// redirect to app
-	if s.Config.Vhosts && !resource.Exists && resource.Base == strings.TrimRight(req.BaseURI(), "/") && contentType == "text/html" && req.Method != "HEAD" {
-		w.Header().Set(HCType, contentType)
-		urlStr := s.Config.SignUpApp + url.QueryEscape(resource.Obj.Scheme+"://"+resource.Obj.Host+"/"+SystemPrefix+"/accountStatus")
+	if s.Config.Vhosts && !resource.Exists && resource.Base == strings.TrimRight(req.BaseURI(), "/") && contentType == constant.TextHtml && req.Method != "HEAD" {
+		w.Header().Set(constant.HCType, contentType)
+		urlStr := s.Config.SignUpApp + url.QueryEscape(resource.Obj.Scheme+"://"+resource.Obj.Host+"/"+constant.SystemPrefix+"/accountStatus")
 		http.Redirect(w, req.Request, urlStr, 303)
 		return
 	}
@@ -363,21 +314,19 @@ func (s Server) GetHead(w http.ResponseWriter, req *httpRequest, resource *domai
 	if !req.ifMatch("\"" + etag + "\"") {
 		return r.respond(412, "412 - Precondition Failed")
 	}
-	if !req.ifNoneMatch("\""+etag+"\"") && contentType != "text/html" {
+	if !req.ifNoneMatch("\""+etag+"\"") && contentType != constant.TextHtml {
 		// do not return cached views of dirs for html requests
 		return r.respond(304, "304 - Not Modified")
 	}
 
 	g := domain.NewGraph(resource.URI)
-
 	if resource.IsDir {
-		if len(s.Config.DirIndex) > 0 && contentType == "text/html" {
-			magicType = "text/html"
+		if len(s.Config.DirIndex) > 0 && contentType == constant.TextHtml {
+			magicType = constant.TextHtml
 			maybeRDF = false
 			for _, dirIndex := range s.Config.DirIndex {
-				_, xerr := os.Stat(resource.File + dirIndex)
 				status = 200
-				if xerr == nil {
+				if s.fileHandler.Exists(resource.File + dirIndex) {
 					resource, err = s.pathInformer.GetPathInfo(resource.Base + "/" + resource.Path + dirIndex)
 					if err != nil {
 						return r.respond(500, err)
@@ -386,7 +335,7 @@ func (s Server) GetHead(w http.ResponseWriter, req *httpRequest, resource *domai
 					break
 				} else if req.Method != "HEAD" {
 					//TODO load file manager app from local preference file
-					w.Header().Set(HCType, contentType)
+					w.Header().Set(constant.HCType, contentType)
 					urlStr := s.Config.DirApp + resource.Obj.Scheme + "/" + resource.Obj.Host + "/" + resource.Obj.Path + "?" + req.Request.URL.RawQuery
 					s.debug.Println("Redirecting to", urlStr)
 					http.Redirect(w, req.Request, urlStr, 303)
@@ -495,7 +444,7 @@ func (s Server) GetHead(w http.ResponseWriter, req *httpRequest, resource *domai
 									//infoUrl, _ := url.Parse(info.Name())
 									guessType := f.FileType
 
-									if guessType == "text/plain" {
+									if guessType == constant.TextPlain {
 										// open file and attempt to read the first line
 										// Open an input file, exit on error.
 										fd, err := os.Open(f.File)
@@ -548,21 +497,21 @@ func (s Server) GetHead(w http.ResponseWriter, req *httpRequest, resource *domai
 		if len(mime.MimeRdfExt[resource.Extension]) > 0 {
 			maybeRDF = true
 		}
-		if !maybeRDF && magicType == "text/plain" {
+		if !maybeRDF && magicType == constant.TextPlain {
 			maybeRDF = true
 		}
 		s.debug.Println("Setting CType to:", magicType)
 		status = 200
 
-		if req.Method == "GET" && strings.Contains(contentType, "text/html") {
+		if req.Method == "GET" && strings.Contains(contentType, constant.TextHtml) {
 			// delete ETag to force load the app
 			w.Header().Del("ETag")
 			w.Header().Set("Link", s.uriManipulator.Brack(resource.MetaURI)+"; rel=\"meta\", "+s.uriManipulator.Brack(resource.AclURI)+"; rel=\"acl\"")
 			if maybeRDF {
-				w.Header().Set(HCType, contentType)
+				w.Header().Set(constant.HCType, contentType)
 				return r.respond(200, s.templater.Login())
 			}
-			w.Header().Set(HCType, magicType)
+			w.Header().Set(constant.HCType, magicType)
 			w.WriteHeader(200)
 			f, err := os.Open(resource.File)
 			if err == nil {
@@ -582,12 +531,12 @@ func (s Server) GetHead(w http.ResponseWriter, req *httpRequest, resource *domai
 	}
 
 	if req.Method == "HEAD" {
-		w.Header().Set(HCType, contentType)
+		w.Header().Set(constant.HCType, contentType)
 		return r.respond(status)
 	}
 
 	if !maybeRDF && len(magicType) > 0 {
-		w.Header().Set(HCType, magicType)
+		w.Header().Set(constant.HCType, magicType)
 
 		if status == 200 {
 			f, err := os.Open(resource.File)
@@ -607,40 +556,10 @@ func (s Server) GetHead(w http.ResponseWriter, req *httpRequest, resource *domai
 
 	if maybeRDF {
 		s.fileHandler.ReadFile(g, s.parser, resource.File)
-		w.Header().Set(HCType, contentType)
+		w.Header().Set(constant.HCType, contentType)
 	}
 
-	data := ""
-	if Streaming {
-		errCh := make(chan error, 8)
-		go func() {
-			rf, wf, err := os.Pipe()
-			if err != nil {
-				errCh <- err
-				return
-			}
-			go func() {
-				defer wf.Close()
-				err := s.fileHandler.WriteFile(g, wf, contentType)
-				if err != nil {
-					errCh <- err
-				}
-			}()
-			go func() {
-				defer rf.Close()
-				_, err := io.Copy(w, rf)
-				if err != nil {
-					errCh <- err
-				} else {
-					errCh <- nil
-				}
-			}()
-		}()
-		err = <-errCh
-	} else {
-		data, err = s.rdfHandler.Serialize(g, contentType)
-	}
-
+	data, err := s.rdfHandler.Serialize(g, contentType)
 	if err != nil {
 		return r.respond(500, err)
 	} else if len(data) > 0 {
@@ -688,7 +607,7 @@ func (s *Server) Patch(w http.ResponseWriter, req *httpRequest, resource *domain
 		s.fileHandler.ReadFile(g, s.parser, resource.File)
 
 		switch dataMime {
-		case "application/json":
+		case constant.ApplicationJSON:
 			s.JSONPatch(g, body)
 		case "application/sparql-update":
 			sparql := NewSPARQLUpdate(g.URI())
@@ -903,7 +822,7 @@ func (s Server) Post(w http.ResponseWriter, req *httpRequest, resource *domain.P
 			s.fileHandler.ReadFile(g, s.parser, resource.File)
 
 			switch dataMime {
-			case "application/json":
+			case constant.ApplicationJSON:
 				s.JSONPatch(g, req.Body)
 			case "application/sparql-update":
 				sparql := NewSPARQLUpdate(g.URI())
@@ -1109,6 +1028,7 @@ func (s *Server) CopyMoveLockUnlock(w http.ResponseWriter, req *httpRequest, res
 	if aclWrite > 200 || err != nil {
 		return r.respond(aclWrite, s.handleStatusText(aclWrite, err))
 	}
+
 	s.webdav.ServeHTTP(w, req.Request)
 	return
 }
@@ -1134,27 +1054,23 @@ func (s *Server) handle(w http.ResponseWriter, req *httpRequest) (r *response) {
 	w.Header().Set("MS-Author-Via", "DAV, SPARQL")
 	w.Header().Set("Updates-Via", "wss://"+req.Host+"/")
 
-	// Get request key
-	rKey := req.Request.FormValue("key")
-
 	// Authentication
 	user := s.authn(req, w)
 	req.User = user
 	w.Header().Set("User", user)
-	acl := NewWAC(user, rKey)
+	acl := NewWAC(user, req.Request.FormValue("key"))
 
 	// check if is owner
 	req.IsOwner = false
 	resource, _ := s.pathInformer.GetPathInfo(req.BaseURI())
 	if len(user) > 0 {
-		aclStatus, err := s.AllowWrite(acl, req.Header.Get("Origin"), resource.Base)
-		if aclStatus == 200 && err == nil {
+		if aclStatus, err := s.AllowWrite(acl, req.Header.Get("Origin"), resource.Base); aclStatus == 200 && err == nil {
 			req.IsOwner = true
 		}
 	}
 
 	// Intercept API requests
-	if strings.Contains(req.Request.URL.Path, "/"+SystemPrefix) && req.Method != "OPTIONS" {
+	if strings.Contains(req.Request.URL.Path, "/"+constant.SystemPrefix) && req.Method != "OPTIONS" {
 		resp := HandleSystem(w, req, s)
 		if resp.Bytes != nil && len(resp.Bytes) > 0 {
 			// copy raw bytes
@@ -1165,7 +1081,7 @@ func (s *Server) handle(w http.ResponseWriter, req *httpRequest) (r *response) {
 	}
 
 	// Proxy requests
-	if strings.HasSuffix(req.URL.Path, ProxyPath) {
+	if strings.HasSuffix(req.URL.Path, constant.ProxyPath) {
 		err = s.ProxyReq(w, req, s.Config.ProxyTemplate+req.FormValue("uri"))
 		if err != nil {
 			s.debug.Println("Proxy error:", err.Error())
@@ -1174,14 +1090,14 @@ func (s *Server) handle(w http.ResponseWriter, req *httpRequest) (r *response) {
 	}
 
 	// Query requests
-	if req.Method == "POST" && strings.Contains(req.URL.Path, QueryPath) && len(s.Config.QueryTemplate) > 0 {
+	if req.Method == "POST" && strings.Contains(req.URL.Path, constant.QueryPath) && len(s.Config.QueryTemplate) > 0 {
 		return TwinqlQuery(w, req, s)
 	}
 
 	//s.debug.Println(req.RemoteAddr + " requested resource URI: " + req.URL.String())
 	//s.debug.Println(req.RemoteAddr + " requested resource Path: " + resource.File)
 
-	dataMime := req.Header.Get(HCType)
+	dataMime := req.Header.Get(constant.HCType)
 	dataMime = strings.Split(dataMime, ";")[0]
 	dataHasParser := len(mime.MimeParser[dataMime]) > 0
 	if len(dataMime) > 0 {
@@ -1211,7 +1127,7 @@ func (s *Server) handle(w http.ResponseWriter, req *httpRequest) (r *response) {
 	// generic headers
 	w.Header().Set("Accept-Patch", "application/json, application/sparql-update")
 	w.Header().Set("Accept-Post", "text/turtle, application/json")
-	w.Header().Set("Allow", strings.Join(methodsAll, ", "))
+	w.Header().Set("Allow", strings.Join(constant.AllMethods(), ", "))
 	w.Header().Set("Vary", "Origin")
 
 	switch req.Method {
@@ -1276,21 +1192,24 @@ func (Server) JSONPatch(g *domain.Graph, r io.Reader) error {
 	return nil
 }
 
+func isLocal(host string) bool {
+	return strings.HasPrefix(host, "10.") ||
+		strings.HasPrefix(host, "172.16.") ||
+		strings.HasPrefix(host, "192.168.") ||
+		strings.HasPrefix(host, "localhost")
+}
+
 // Proxy requests
 func (s *Server) ProxyReq(w http.ResponseWriter, req *httpRequest, reqUrl string) error {
 	uri, err := url.Parse(reqUrl)
 	if err != nil {
 		return err
 	}
-	host := uri.Host
-	if !s.Config.ProxyLocal {
-		if strings.HasPrefix(host, "10.") ||
-			strings.HasPrefix(host, "172.16.") ||
-			strings.HasPrefix(host, "192.168.") ||
-			strings.HasPrefix(host, "localhost") {
-			return errors.New("Proxying requests to the local network is not allowed.")
-		}
+
+	if !s.Config.ProxyLocal && isLocal(uri.Host) {
+		return errors.New("Proxying requests to the local network is not allowed.")
 	}
+
 	if len(req.FormValue("key")) > 0 {
 		token, err := decodeQuery(req.FormValue("key"))
 		if err != nil {
@@ -1300,13 +1219,13 @@ func (s *Server) ProxyReq(w http.ResponseWriter, req *httpRequest, reqUrl string
 		if err != nil {
 			s.debug.Println(err.Error())
 		} else {
-			s.debug.Println("Authorization valid for user", user)
+			s.debug.Println("HAuthorization valid for user", user)
 		}
 		req.User = user
 	}
 
-	if len(req.Header.Get("Authorization")) > 0 {
-		token, err := ParseBearerAuthorizationHeader(req.Header.Get("Authorization"))
+	if len(req.Header.Get(constant.HAuthorization)) > 0 {
+		token, err := ParseBearerAuthorizationHeader(req.Header.Get(constant.HAuthorization))
 		if err != nil {
 			s.debug.Println(err.Error())
 		}
@@ -1314,13 +1233,13 @@ func (s *Server) ProxyReq(w http.ResponseWriter, req *httpRequest, reqUrl string
 		if err != nil {
 			s.debug.Println(err.Error())
 		} else {
-			s.debug.Println("Authorization valid for user", user)
+			s.debug.Println("HAuthorization valid for user", user)
 		}
 		req.User = user
 	}
 
 	req.URL = uri
-	req.Host = host
+	req.Host = uri.Host
 	req.RequestURI = uri.RequestURI()
 	req.Header.Set("User", req.User)
 	proxy.ServeHTTP(w, req.Request)

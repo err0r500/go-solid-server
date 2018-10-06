@@ -5,6 +5,7 @@ import (
 	"mime"
 	"path/filepath"
 
+	"github.com/err0r500/go-solid-server/constant"
 	crdf "github.com/presbrey/goraptor"
 
 	"regexp"
@@ -16,18 +17,18 @@ import (
 // fixme : remove these global vars
 var MimeSerializer = map[string]string{
 	"application/ld+json": "internal",
-	"text/html":           "internal",
+	constant.TextHtml:     "internal",
 }
 
 var MimeParser = map[string]string{
 	"application/ld+json":       "jsonld",
-	"application/json":          "internal",
+	constant.ApplicationJSON:    "internal",
 	"application/sparql-update": "internal",
 }
 
 var MimeRdfExt = map[string]string{
 	".ttl":    "text/turtle",
-	".n3":     "text/n3",
+	".n3":     constant.TextN3,
 	".rdf":    "application/rdf+xml",
 	".jsonld": "application/ld+json",
 }
@@ -53,12 +54,12 @@ func init() {
 
 	for _, syntax := range crdf.ParserSyntax {
 		switch syntax.MimeType {
-		case "", "text/html":
+		case "", constant.TextHtml:
 			continue
 		}
 		MimeParser[syntax.MimeType] = syntax.Name
 	}
-	MimeParser["text/n3"] = MimeParser["text/turtle"]
+	MimeParser[constant.TextN3] = MimeParser["text/turtle"]
 
 	for name, syntax := range crdf.SerializerSyntax {
 		switch name {
@@ -91,7 +92,7 @@ func GuessMimeType(path string) (mimeType string, err error) {
 	// text/plain and then set the MimeType only if
 	// MagicMime returned something that looks legit.
 	// Open the Mime Magic DB only once.
-	mimeType = "text/plain"
+	mimeType = constant.TextPlain
 	mutex.Lock()
 	guessedType, _ := magicmime.TypeByFile(path)
 	mutex.Unlock()

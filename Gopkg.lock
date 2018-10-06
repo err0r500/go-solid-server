@@ -42,14 +42,6 @@
   revision = "4f5db6791326b8962ede4edbba693edcf20fd1ad"
 
 [[projects]]
-  digest = "1:f1d66760579d15e7f7736e00529ab23b5586382178d5d68ba23960edc5d8dd84"
-  name = "github.com/linkeddata/gold"
-  packages = ["."]
-  pruneopts = "UT"
-  revision = "9065f801238b57cf8d9286510db0a6e1feeec27c"
-  version = "v1.0.1"
-
-[[projects]]
   digest = "1:0028cb19b2e4c3112225cd871870f2d9cf49b9b4276531f03438a88e94be86fe"
   name = "github.com/pmezard/go-difflib"
   packages = ["difflib"]
@@ -110,7 +102,6 @@
     "github.com/elazarl/goproxy",
     "github.com/gorilla/securecookie",
     "github.com/linkeddata/gojsonld",
-    "github.com/linkeddata/gold",
     "github.com/presbrey/goraptor",
     "github.com/rakyll/magicmime",
     "github.com/stretchr/testify/assert",

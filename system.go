@@ -17,6 +17,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/err0r500/go-solid-server/constant"
+
 	"github.com/boltdb/bolt"
 	"github.com/err0r500/go-solid-server/domain"
 )
@@ -171,10 +173,10 @@ func (s *Server) logIn(w http.ResponseWriter, req *httpRequest) SystemReturn {
 func loginRedirect(w http.ResponseWriter, req *httpRequest, s *Server, values map[string]string, redirTo string) SystemReturn {
 	key := ""
 	// try to get existing token
-	key, err := s.getTokenByOrigin("Authorization", req.Host, values["origin"])
+	key, err := s.getTokenByOrigin(constant.HAuthorization, req.Host, values["origin"])
 	if err != nil || len(key) == 0 {
 		s.debug.Println("Could not find a token for origin:", values["origin"])
-		key, err = s.newPersistedToken("Authorization", req.Host, values)
+		key, err = s.newPersistedToken(constant.HAuthorization, req.Host, values)
 		if err != nil {
 			s.debug.Println("Could not generate authorization token for " + values["webid"] + ", err: " + err.Error())
 			return SystemReturn{Status: 500, Body: "Could not generate auth token for " + values["webid"] + ", err: " + err.Error()}
@@ -247,7 +249,7 @@ func sendRecoveryToken(w http.ResponseWriter, req *httpRequest, s *Server) Syste
 	}
 	// create recovery URL
 	IP, _, _ := net.SplitHostPort(req.Request.RemoteAddr)
-	link := resource.Base + "/" + SystemPrefix + "/recovery?token=" + encodeQuery(token)
+	link := resource.Base + "/" + constant.SystemPrefix + "/recovery?token=" + encodeQuery(token)
 	// Setup message
 	params := make(map[string]string)
 	params["{{.To}}"] = email
@@ -420,7 +422,7 @@ func newAccount(w http.ResponseWriter, req *httpRequest, s *Server) SystemReturn
 	// Write ACL for the profile
 	aclTerm := domain.NewResource(resource.AclURI + "#owner")
 	g = domain.NewGraph(resource.AclURI)
-	g.AddTriple(aclTerm, domain.NewNS("type").Get("type"), domain.NewNS("acl").Get("Authorization"))
+	g.AddTriple(aclTerm, domain.NewNS("type").Get("type"), domain.NewNS("acl").Get(constant.HAuthorization))
 	g.AddTriple(aclTerm, domain.NewNS("acl").Get("accessTo"), domain.NewResource(webidURL))
 	g.AddTriple(aclTerm, domain.NewNS("acl").Get("accessTo"), domain.NewResource(resource.AclURI))
 	g.AddTriple(aclTerm, domain.NewNS("acl").Get("agent"), domain.NewResource(webidURI))
@@ -428,7 +430,7 @@ func newAccount(w http.ResponseWriter, req *httpRequest, s *Server) SystemReturn
 	g.AddTriple(aclTerm, domain.NewNS("acl").Get("mode"), domain.NewNS("acl").Get("Write"))
 	g.AddTriple(aclTerm, domain.NewNS("acl").Get("mode"), domain.NewNS("acl").Get("Control"))
 	readAllTerm := domain.NewResource(resource.AclURI + "#readall")
-	g.AddTriple(readAllTerm, domain.NewNS("rdf").Get("type"), domain.NewNS("acl").Get("Authorization"))
+	g.AddTriple(readAllTerm, domain.NewNS("rdf").Get("type"), domain.NewNS("acl").Get(constant.HAuthorization))
 	g.AddTriple(readAllTerm, domain.NewNS("acl").Get("accessTo"), domain.NewResource(webidURL))
 	g.AddTriple(readAllTerm, domain.NewNS("acl").Get("agentClass"), domain.NewNS("foaf").Get("Agent"))
 	g.AddTriple(readAllTerm, domain.NewNS("acl").Get("mode"), domain.NewNS("acl").Get("Read"))
@@ -466,7 +468,7 @@ func newAccount(w http.ResponseWriter, req *httpRequest, s *Server) SystemReturn
 	resource, _ = s.pathInformer.GetPathInfo(accountBase)
 	aclTerm = domain.NewResource(resource.AclURI + "#owner")
 	g = domain.NewGraph(resource.AclURI)
-	g.AddTriple(aclTerm, domain.NewNS("rdf").Get("type"), domain.NewNS("acl").Get("Authorization"))
+	g.AddTriple(aclTerm, domain.NewNS("rdf").Get("type"), domain.NewNS("acl").Get(constant.HAuthorization))
 	g.AddTriple(aclTerm, domain.NewNS("acl").Get("accessTo"), domain.NewResource(resource.URI))
 	g.AddTriple(aclTerm, domain.NewNS("acl").Get("accessTo"), domain.NewResource(resource.AclURI))
 	g.AddTriple(aclTerm, domain.NewNS("acl").Get("agent"), domain.NewResource(webidURI))
@@ -543,7 +545,7 @@ func newAccount(w http.ResponseWriter, req *httpRequest, s *Server) SystemReturn
 
 		ua := req.Header.Get("User-Agent")
 		if strings.Contains(ua, "Chrome") {
-			w.Header().Set(HCType, "application/x-x509-user-cert; charset=utf-8")
+			w.Header().Set(constant.HCType, "application/x-x509-user-cert; charset=utf-8")
 			return SystemReturn{Status: 200, Bytes: newSpkac}
 		}
 		// Prefer loading cert in iframe, to access onLoad events in the browser for the iframe
@@ -603,14 +605,14 @@ func newCert(w http.ResponseWriter, req *httpRequest, s *Server) SystemReturn {
 
 		ua := req.Header.Get("User-Agent")
 		if strings.Contains(ua, "Chrome") {
-			w.Header().Set(HCType, "application/x-x509-user-cert; charset=utf-8")
+			w.Header().Set(constant.HCType, "application/x-x509-user-cert; charset=utf-8")
 			return SystemReturn{Status: 200, Bytes: newSpkac}
 		}
 		// Prefer loading cert in iframe, to access onLoad events in the browser for the iframe
 		body := `<iframe width="0" height="0" style="display: none;" src="data:application/x-x509-user-cert;base64,` + base64.StdEncoding.EncodeToString(newSpkac) + `"></iframe>`
 
 		return SystemReturn{Status: 200, Body: body}
-	} else if strings.Contains(req.Header.Get("Accept"), "text/html") {
+	} else if strings.Contains(req.Header.Get("Accept"), constant.TextHtml) {
 		return SystemReturn{Status: 200, Body: s.templater.NewCert()}
 	}
 	return SystemReturn{Status: 500, Body: "Your request could not be processed. Either no WebID or no SPKAC value was provided."}
@@ -656,7 +658,7 @@ func accountStatus(w http.ResponseWriter, req *httpRequest, s *Server) SystemRet
 	}
 	accReq.AccountName = strings.ToLower(accReq.AccountName)
 
-	w.Header().Set(HCType, "application/json")
+	w.Header().Set(constant.HCType, constant.ApplicationJSON)
 	status := "success"
 	accName := accReq.AccountName
 	accURL := resource.Base + "/" + accName + "/"
@@ -679,9 +681,9 @@ func accountStatus(w http.ResponseWriter, req *httpRequest, s *Server) SystemRet
 	res := statusResponse{
 		Method:    "status",
 		Status:    status,
-		FormURL:   resource.Obj.Scheme + "://" + req.Host + "/" + SystemPrefix + "/new",
-		LoginURL:  accURL + SystemPrefix + "/login",
-		LogoutURL: accURL + SystemPrefix + "/logout",
+		FormURL:   resource.Obj.Scheme + "://" + req.Host + "/" + constant.SystemPrefix + "/new",
+		LoginURL:  accURL + constant.SystemPrefix + "/login",
+		LogoutURL: accURL + constant.SystemPrefix + "/logout",
 		Response: accountResponse{
 			AccountURL: accURL,
 			Available:  isAvailable,
@@ -706,15 +708,15 @@ func accountTokens(w http.ResponseWriter, req *httpRequest, s *Server) SystemRet
 
 	if len(req.FormValue("revokeAuthz")) > 0 {
 		delStatus := "<p style=\"color: green;\">Successfully revoked token!</p>"
-		err := s.deletePersistedToken("Authorization", req.Host, req.FormValue("revokeAuthz"))
+		err := s.deletePersistedToken(constant.HAuthorization, req.Host, req.FormValue("revokeAuthz"))
 		if err != nil {
 			delStatus = "<p>Could not revoke token. Error: " + err.Error() + "</p>"
 		}
 		tokensHtml += delStatus
 	}
 
-	tokens, err := s.getTokensByType("Authorization", req.Host)
-	tokensHtml += "<h2>Authorization tokens for applications</h2>\n"
+	tokens, err := s.getTokensByType(constant.HAuthorization, req.Host)
+	tokensHtml += "<h2>HAuthorization tokens for applications</h2>\n"
 	tokensHtml += "<div>"
 	if err == nil {
 		for token, values := range tokens {

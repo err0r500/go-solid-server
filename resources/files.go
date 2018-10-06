@@ -1,4 +1,4 @@
-package gold
+package resources
 
 import (
 	"log"
@@ -9,12 +9,18 @@ import (
 	"github.com/err0r500/go-solid-server/domain"
 )
 
-type OrigFilesHandler struct {
+type origFilesHandler struct {
 	rdfHandler uc.Encoder
 }
 
+func New(encoder uc.Encoder) uc.FilesHandler {
+	return origFilesHandler{
+		rdfHandler: encoder,
+	}
+}
+
 // WriteFile is used to dump RDF from a Graph into a file
-func (OrigFilesHandler) WriteFile(g *domain.Graph, file *os.File, mime string) error {
+func (origFilesHandler) WriteFile(g *domain.Graph, file *os.File, mime string) error {
 	//serializerName := mimeSerializer[mime]
 	//if len(serializerName) == 0 {
 	//	serializerName = "turtle"
@@ -41,7 +47,7 @@ func (OrigFilesHandler) WriteFile(g *domain.Graph, file *os.File, mime string) e
 }
 
 // AppendFile is used to append RDF from a file, using a base URI
-func (h OrigFilesHandler) AppendFile(g *domain.Graph, filename string, baseURI string) {
+func (h origFilesHandler) AppendFile(g *domain.Graph, filename string, baseURI string) {
 	_, err := os.Stat(filename)
 	if os.IsNotExist(err) {
 		return
@@ -60,7 +66,7 @@ func (h OrigFilesHandler) AppendFile(g *domain.Graph, filename string, baseURI s
 }
 
 // ReadFile is used to read RDF data from a file into the graph
-func (OrigFilesHandler) ReadFile(g *domain.Graph, parser uc.Encoder, filename string) {
+func (origFilesHandler) ReadFile(g *domain.Graph, parser uc.Encoder, filename string) {
 	stat, err := os.Stat(filename)
 	if os.IsNotExist(err) {
 		return
@@ -77,4 +83,9 @@ func (OrigFilesHandler) ReadFile(g *domain.Graph, parser uc.Encoder, filename st
 		return
 	}
 	parser.Parse(g, f, "text/turtle")
+}
+
+func (origFilesHandler) Exists(path string) bool {
+	_, err := os.Stat(path)
+	return err == nil
 }

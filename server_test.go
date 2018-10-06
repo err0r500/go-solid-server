@@ -178,18 +178,18 @@ func TestGraphPatch(t *testing.T) {
 //func TestIndexHTMLFile(t *testing.T) {
 //	request, err := http.NewRequest("PUT", testServer.URL+"/_test/index.html", strings.NewReader("<html>Hello world!</html>"))
 //	assert.NoError(t, err)
-//	request.Header.Add("Content-Type", "text/html")
+//	request.Header.Add("Content-Type", constant.TextHtml)
 //	response, err := httpClient.Do(request)
 //	assert.NoError(t, err)
 //	assert.Equal(t, 201, response.StatusCode)
 //
 //	request, err = http.NewRequest("GET", testServer.URL+"/_test/", nil)
 //	assert.NoError(t, err)
-//	request.Header.Add("Accept", "text/html")
+//	request.Header.Add("Accept", constant.TextHtml)
 //	response, err = httpClient.Do(request)
 //	assert.NoError(t, err)
 //	assert.Equal(t, 200, response.StatusCode)
-//	assert.Contains(t, response.Header.Get("Content-Type"), "text/html")
+//	assert.Contains(t, response.Header.Get("Content-Type"), constant.TextHtml)
 //	body, err := ioutil.ReadAll(response.Body)
 //	response.Body.Close()
 //	assert.Contains(t, string(body), "<html>Hello world!</html>")
@@ -231,7 +231,7 @@ func TestGraphPatch(t *testing.T) {
 //	response, err = httpClient.Do(request)
 //	assert.NoError(t, err)
 //	assert.Equal(t, 200, response.StatusCode)
-//	assert.Contains(t, response.Header.Get("Content-Type"), "text/plain")
+//	assert.Contains(t, response.Header.Get("Content-Type"), constant.TextPlain)
 //
 //	request, err = http.NewRequest("GET", testServer.URL+"/_test/reset.css", nil)
 //	assert.NoError(t, err)
@@ -275,7 +275,7 @@ func TestGraphPatch(t *testing.T) {
 //
 //	request, err := http.NewRequest("GET", testServer1.URL, nil)
 //	assert.NoError(t, err)
-//	request.Header.Add("Accept", "text/html")
+//	request.Header.Add("Accept", constant.TextHtml)
 //	response, err := user1h.Do(request)
 //	assert.NoError(t, err)
 //	body, _ := ioutil.ReadAll(response.Body)
@@ -285,7 +285,7 @@ func TestGraphPatch(t *testing.T) {
 //
 //	request, err = http.NewRequest("GET", testServer1.URL+"/dir/", nil)
 //	assert.NoError(t, err)
-//	request.Header.Add("Accept", "text/html")
+//	request.Header.Add("Accept", constant.TextHtml)
 //	response, err = user1h.Do(request)
 //	assert.NoError(t, err)
 //	response.Body.Close()
@@ -293,7 +293,7 @@ func TestGraphPatch(t *testing.T) {
 //
 //	request, err = http.NewRequest("GET", testServer1.URL+"/file", nil)
 //	assert.NoError(t, err)
-//	request.Header.Add("Accept", "text/html")
+//	request.Header.Add("Accept", constant.TextHtml)
 //	response, err = user1h.Do(request)
 //	assert.NoError(t, err)
 //	assert.Equal(t, 404, response.StatusCode)
@@ -314,7 +314,7 @@ func TestGraphPatch(t *testing.T) {
 //
 //	request, err = http.NewRequest("GET", testServer.URL+"/_test", nil)
 //	assert.NoError(t, err)
-//	request.Header.Add("Accept", "text/html")
+//	request.Header.Add("Accept", constant.TextHtml)
 //	response, err = transport.RoundTrip(request)
 //	assert.NoError(t, err)
 //	body, _ = ioutil.ReadAll(response.Body)
@@ -330,7 +330,7 @@ func TestGraphPatch(t *testing.T) {
 //
 //	request, err := http.NewRequest("GET", testServer.URL+"/_test/", nil)
 //	assert.NoError(t, err)
-//	request.Header.Add("Accept", "text/html")
+//	request.Header.Add("Accept", constant.TextHtml)
 //	response, err := transport.RoundTrip(request)
 //	assert.NoError(t, err)
 //	assert.Equal(t, 303, response.StatusCode)
@@ -775,7 +775,7 @@ func TestGraphPatch(t *testing.T) {
 //func TestPATCHJson(t *testing.T) {
 //	request, err := http.NewRequest("PATCH", testServer.URL+"/_test/abc", strings.NewReader(`{"a":{"b":[{"type":"uri","value":"c"}]}}`))
 //	assert.NoError(t, err)
-//	request.Header.Add("Content-Type", "application/json")
+//	request.Header.Add("Content-Type", constant.ApplicationJSON)
 //	response, err := httpClient.Do(request)
 //	assert.NoError(t, err)
 //	assert.Equal(t, 200, response.StatusCode)
@@ -1041,7 +1041,7 @@ func TestGraphPatch(t *testing.T) {
 //	request, err = http.NewRequest("HEAD", testServer.URL+"/_test/", nil)
 //	assert.NoError(t, err)
 //	request.Header.Add("If-None-Match", ETag)
-//	request.Header.Add("Accept", "text/html")
+//	request.Header.Add("Accept", constant.TextHtml)
 //	response, err = httpClient.Do(request)
 //	assert.NoError(t, err)
 //	assert.Equal(t, 200, response.StatusCode)
@@ -1392,7 +1392,7 @@ func TestGraphPatch(t *testing.T) {
 //	e := 0
 //	for i := 0; i < b.N; i++ {
 //		request, _ := http.NewRequest("PATCH", testServer.URL+"/_bench/test", strings.NewReader(`{"a":{"b":[{"type":"literal","value":"`+fmt.Sprintf("%d", b.N)+`"}]}}`))
-//		request.Header.Add("Content-Type", "application/json")
+//		request.Header.Add("Content-Type", constant.ApplicationJSON)
 //		if response, _ := httpClient.Do(request); response.StatusCode != 200 {
 //			e++
 //		}
@@ -1407,7 +1407,7 @@ func TestGraphPatch(t *testing.T) {
 //	e := 0
 //	for i := 0; i < b.N; i++ {
 //		request, _ := http.NewRequest("GET", testServer.URL+"/_bench/test", nil)
-//		request.Header.Add("Content-Type", "application/json")
+//		request.Header.Add("Content-Type", constant.ApplicationJSON)
 //		if response, _ := httpClient.Do(request); response.StatusCode != 200 {
 //			e++
 //		}

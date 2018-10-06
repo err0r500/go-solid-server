@@ -10,24 +10,24 @@ package mime
 //
 //var (
 //	mimeParserExpect = map[string]string{
-//		// "application/json":          "internal",
+//		// constant.ApplicationJSON:          "internal",
 //		"application/sparql-update": "internal",
 //
 //		"application/ld+json": "jsonld",
 //		"application/rdf+xml": "rdfxml",
 //		"application/rss":     "rss-tag-soup",
 //		"application/x-trig":  "trig",
-//		"text/n3":             "turtle",
+//		constant.TextN3:             "turtle",
 //		"text/turtle":         "turtle",
 //		"text/x-nquads":       "nquads",
 //		// "application/n-triples": "ntriples",
 //	}
 //	mimeSerializerExpect = map[string]string{
 //		"application/ld+json": "internal",
-//		"text/html":           "internal",
+//		constant.TextHtml:           "internal",
 //
 //		"application/atom+xml":  "atom",
-//		"application/json":      "json",
+//		constant.ApplicationJSON:      "json",
 //		"application/rdf+xml":   "rdfxml-abbrev",
 //		"application/rss+xml":   "rss-1.0",
 //		"application/xhtml+xml": "html",
@@ -67,7 +67,7 @@ package mime
 //
 //	// /space/	text/html 	/space/
 //	path = "/space/"
-//	ctype = "text/html"
+//	ctype = constant.TextHtml
 //	res, err = MapPathToExtension(path, ctype)
 //	assert.NoError(t, err)
 //	assert.Equal(t, path, res)
@@ -88,7 +88,7 @@ package mime
 //
 //	// /space/foo.html	text/html	/space/foo.html
 //	path = "/space/foo.html"
-//	ctype = "text/html"
+//	ctype = constant.TextHtml
 //	res, err = MapPathToExtension(path, ctype)
 //	assert.NoError(t, err)
 //	assert.Equal(t, path, res)
@@ -130,35 +130,35 @@ package mime
 //
 //	// /space/foo	nil		/space/foo.jpg$.htm
 //	path = "/space/foo"
-//	ctype = "text/html"
+//	ctype = constant.TextHtml
 //	res, err = MapPathToExtension(path, "")
 //	assert.Error(t, err)
 //	assert.Empty(t, res)
 //
 //	// /space/foo.jpg	text/html	/space/foo.jpg$.htm
 //	path = "/space/foo.jpg"
-//	ctype = "text/html"
+//	ctype = constant.TextHtml
 //	res, err = MapPathToExtension(path, ctype)
 //	assert.NoError(t, err)
 //	assert.Contains(t, res, path+"$.htm")
 //
 //	// /space/foo.exe	text/html	/space/foo.exe$.htm
 //	path = "/space/foo.exe"
-//	ctype = "text/html"
+//	ctype = constant.TextHtml
 //	res, err = MapPathToExtension(path, ctype)
 //	assert.NoError(t, err)
 //	assert.Contains(t, res, path+"$.htm")
 //
 //	// /space/foo.ttl.acl	text/html	/space/foo.ttl.acl$.htm
 //	path = "/space/foo.ttl" + config.ACLSuffix
-//	ctype = "text/html"
+//	ctype = constant.TextHtml
 //	res, err = MapPathToExtension(path, ctype)
 //	assert.NoError(t, err)
 //	assert.Contains(t, res, path+"$.htm")
 //
 //	// /space/foo.b4r	text/html	/space/foo.b4r$.htm
 //	path = "/space/foo.bar"
-//	ctype = "text/html"
+//	ctype = constant.TextHtml
 //	res, err = MapPathToExtension(path, ctype)
 //	assert.NoError(t, err)
 //	assert.Contains(t, res, path+"$.htm")
@@ -169,7 +169,7 @@ package mime
 //		in, want string
 //	}{
 //		{".ttl", "text/turtle"},
-//		{".n3", "text/n3"},
+//		{".n3", constant.TextN3},
 //		{".rdf", "application/rdf+xml"},
 //		{".jsonld", "application/ld+json"},
 //		{".unrecognized_ext", ""},

@@ -9,6 +9,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/err0r500/go-solid-server/constant"
 )
 
 // DigestAuthentication structure
@@ -22,7 +24,7 @@ type DigestAuthorization struct {
 }
 
 func (s *Server) authn(req *httpRequest, w http.ResponseWriter) string {
-	user, err := req.userCookie()
+	user, err := s.userCookie(req)
 	if err != nil {
 		//req.Server.debug.Println("userCookie error:", err)
 	}
@@ -32,7 +34,7 @@ func (s *Server) authn(req *httpRequest, w http.ResponseWriter) string {
 	}
 
 	// try WebID-RSA
-	if len(req.Header.Get("Authorization")) > 0 {
+	if len(req.Header.Get(constant.HAuthorization)) > 0 {
 		user, err = s.WebIDDigestAuth(req)
 		if err != nil {
 			//req.Server.debug.Println("WebID-RSA auth error:", err)
@@ -70,19 +72,18 @@ func (s *Server) authn(req *httpRequest, w http.ResponseWriter) string {
 	return user
 }
 
-func (req *httpRequest) userCookie() (string, error) {
-	// fixme : not sure it's a smart move to store cookie in shared struct
-	//value := make(map[string]string)
-	//cookie, err := req.Cookie("Session")
-	//if err != nil {
-	//	return "", errors.New(err.Error() + " Got: " + fmt.Sprintf("%s", req.Cookies()))
-	//}
-	//err = req.Server.cookie.Decode("Session", cookie.Value, &value)
-	//if err != nil {
-	//	return "", err
-	//}
-	//return value["user"], nil
-	return "", nil
+func (s *Server) userCookie(req *httpRequest) (string, error) {
+	cookie, err := req.Cookie("Session")
+	if err != nil {
+		return "", errors.New(err.Error() + " Got: " + fmt.Sprintf("%s", req.Cookies()))
+	}
+
+	value := make(map[string]string)
+	if err := s.cookieManager.Decode("Session", cookie.Value, &value); err != nil {
+		return "", err
+	}
+
+	return value["user"], nil
 }
 
 func (srv *Server) userCookieSet(w http.ResponseWriter, user string) error {
@@ -152,12 +153,12 @@ func ParseDigestAuthenticateHeader(header string) (*DigestAuthentication, error)
 	return &auth, nil
 }
 
-// ParseDigestAuthorizationHeader parses an Authorization header and returns a DigestAuthorization object
+// ParseDigestAuthorizationHeader parses an HAuthorization header and returns a DigestAuthorization object
 func ParseDigestAuthorizationHeader(header string) (*DigestAuthorization, error) {
 	auth := DigestAuthorization{}
 
 	if len(header) == 0 {
-		return &auth, errors.New("Cannot parse Authorization header: no header present")
+		return &auth, errors.New("Cannot parse HAuthorization header: no header present")
 	}
 
 	opts := make(map[string]string)
@@ -188,7 +189,7 @@ func ParseDigestAuthorizationHeader(header string) (*DigestAuthorization, error)
 
 func ParseBearerAuthorizationHeader(header string) (string, error) {
 	if len(header) == 0 {
-		return "", errors.New("Cannot parse Authorization header: no header present")
+		return "", errors.New("Cannot parse HAuthorization header: no header present")
 	}
 
 	parts := strings.SplitN(header, " ", 2)
@@ -255,8 +256,8 @@ func IsTokenDateValid(valid string) error {
 }
 
 func (s *Server) GetAuthzFromToken(token string, req *httpRequest) (string, error) {
-	// values, err := GetValuesFromToken("Authorization", token, req, s)
-	values, err := s.getPersistedToken("Authorization", req.Host, token)
+	// values, err := GetValuesFromToken(constant.HAuthorization, token, req, s)
+	values, err := s.getPersistedToken(constant.HAuthorization, req.Host, token)
 	if err != nil {
 		return "", err
 	}

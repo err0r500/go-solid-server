@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"testing"
 
+	"github.com/err0r500/go-solid-server/constant"
 	"github.com/err0r500/go-solid-server/mime"
 	"github.com/stretchr/testify/assert"
 )
@@ -32,7 +33,7 @@ func TestNegotiatePicturesOfWebPages(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	contentType, err := al.Negotiate("text/html", "image/png")
+	contentType, err := al.Negotiate(constant.TextHtml, "image/png")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -62,12 +63,12 @@ func TestNegotiateFirstMatch(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	contentType, err := al.Negotiate("text/html", "text/plain", "text/n3")
+	contentType, err := al.Negotiate(constant.TextHtml, constant.TextPlain, constant.TextN3)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if contentType != "text/html" {
+	if contentType != constant.TextHtml {
 		t.Errorf("got %s expected text/html", contentType)
 	}
 }
@@ -78,12 +79,12 @@ func TestNegotiateSecondMatch(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	contentType, err := al.Negotiate("text/n3", "text/plain")
+	contentType, err := al.Negotiate(constant.TextN3, constant.TextPlain)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if contentType != "text/plain" {
+	if contentType != constant.TextPlain {
 		t.Errorf("got %s expected text/plain", contentType)
 	}
 }
@@ -94,12 +95,12 @@ func TestNegotiateWildcardMatch(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	contentType, err := al.Negotiate("text/n3", "application/rdf+xml")
+	contentType, err := al.Negotiate(constant.TextN3, "application/rdf+xml")
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if contentType != "text/n3" {
+	if contentType != constant.TextN3 {
 		t.Errorf("got %s expected text/n3", contentType)
 	}
 }
@@ -124,7 +125,7 @@ func TestNegotiateEmptyAccept(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	_, err = al.Negotiate("text/plain")
+	_, err = al.Negotiate(constant.TextPlain)
 	if err == nil {
 		t.Error("expected error with empty but present accept header")
 	}

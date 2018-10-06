@@ -8,8 +8,47 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/err0r500/go-solid-server/cookies"
 	"github.com/err0r500/go-solid-server/domain"
+	"github.com/err0r500/go-solid-server/encoder"
+	"github.com/err0r500/go-solid-server/httpCaller"
+	"github.com/err0r500/go-solid-server/mail"
+	"github.com/err0r500/go-solid-server/mime"
+	"github.com/err0r500/go-solid-server/pathInfo"
+	"github.com/err0r500/go-solid-server/resources"
+	"golang.org/x/net/webdav"
 )
+
+// NewServer is used to create a new Server instance
+func NewServer(config domain.ServerConfig) *Server {
+	debugger := log.New(ioutil.Discard, "", 0)
+	if config.Debug {
+		debugger = log.New(os.Stderr, debugPrefix, debugFlags)
+	}
+
+	s := &Server{
+		Config: config,
+		webdav: &webdav.Handler{
+			FileSystem: webdav.Dir(config.DataRoot),
+			LockSystem: webdav.NewMemLS(),
+		},
+		debug:         debugger,
+		cookieManager: cookies.New(),
+		fileHandler:   resources.New(encoder.New()),
+		mailer:        mail.New(domain.EmailConfig{}),
+		parser:        encoder.New(),
+		pathInformer:  pathInfo.New(config),
+		httpCaller:    httpCaller.New(),
+		rdfHandler:    encoder.RdfEncoder{},
+	}
+
+	mime.AddRDFExtension(s.Config.ACLSuffix)
+	mime.AddRDFExtension(s.Config.MetaSuffix)
+
+	s.debug.Println("---- starting server ----")
+	s.debug.Printf("config: %#v\n", s.Config)
+	return s
+}
 
 // NewServerConfig creates a new config object
 func NewServerConfig() *domain.ServerConfig {

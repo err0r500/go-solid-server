@@ -18,6 +18,7 @@ import (
 	"time"
 	"unicode"
 
+	"github.com/err0r500/go-solid-server/constant"
 	"github.com/err0r500/go-solid-server/domain"
 )
 
@@ -77,11 +78,11 @@ func pkeyTypeNE(pkey interface{}) (t, n, e string) {
 
 // WebIDDigestAuth performs a digest authentication using WebID-RSA
 func (s *Server) WebIDDigestAuth(req *httpRequest) (string, error) {
-	if len(req.Header.Get("Authorization")) == 0 {
+	if len(req.Header.Get(constant.HAuthorization)) == 0 {
 		return "", nil
 	}
 
-	authH, err := ParseDigestAuthorizationHeader(req.Header.Get("Authorization"))
+	authH, err := ParseDigestAuthorizationHeader(req.Header.Get(constant.HAuthorization))
 	if err != nil {
 		return "", err
 	}
@@ -97,7 +98,7 @@ func (s *Server) WebIDDigestAuth(req *httpRequest) (string, error) {
 	}
 
 	if len(authH.Username) == 0 || len(claim) == 0 || len(signature) == 0 {
-		return "", errors.New("No WebID and/or claim found in the Authorization header.\n" + req.Header.Get("Authorization"))
+		return "", errors.New("No WebID and/or claim found in the HAuthorization header.\n" + req.Header.Get(constant.HAuthorization))
 	}
 
 	// fetch WebID to get pubKey
@@ -452,7 +453,7 @@ func (s *Server) AddWorkspaces(account webidAccount, containsEmail bool, g *doma
 		aclTerm := domain.NewResource(resource.AclURI + "#owner")
 		wsTerm := domain.NewResource(resource.URI)
 		a := domain.NewGraph(resource.AclURI)
-		a.AddTriple(aclTerm, domain.NewNS("rdf").Get("type"), domain.NewNS("acl").Get("Authorization"))
+		a.AddTriple(aclTerm, domain.NewNS("rdf").Get("type"), domain.NewNS("acl").Get(constant.HAuthorization))
 		a.AddTriple(aclTerm, domain.NewNS("acl").Get("accessTo"), wsTerm)
 		a.AddTriple(aclTerm, domain.NewNS("acl").Get("accessTo"), domain.NewResource(resource.AclURI))
 		a.AddTriple(aclTerm, domain.NewNS("acl").Get("agent"), domain.NewResource(account.WebID))
@@ -465,7 +466,7 @@ func (s *Server) AddWorkspaces(account webidAccount, containsEmail bool, g *doma
 		a.AddTriple(aclTerm, domain.NewNS("acl").Get("mode"), domain.NewNS("acl").Get("Control"))
 		if ws.Type == "PublicWorkspace" {
 			readAllTerm := domain.NewResource(resource.AclURI + "#readall")
-			a.AddTriple(readAllTerm, domain.NewNS("rdf").Get("type"), domain.NewNS("acl").Get("Authorization"))
+			a.AddTriple(readAllTerm, domain.NewNS("rdf").Get("type"), domain.NewNS("acl").Get(constant.HAuthorization))
 			a.AddTriple(readAllTerm, domain.NewNS("acl").Get("accessTo"), wsTerm)
 			a.AddTriple(readAllTerm, domain.NewNS("acl").Get("agentClass"), domain.NewNS("foaf").Get("Agent"))
 			a.AddTriple(readAllTerm, domain.NewNS("acl").Get("mode"), domain.NewNS("acl").Get("Read"))
@@ -473,7 +474,7 @@ func (s *Server) AddWorkspaces(account webidAccount, containsEmail bool, g *doma
 		// Special case for Inbox (append only)
 		if ws.Name == "Inbox" {
 			appendAllTerm := domain.NewResource(resource.AclURI + "#apendall")
-			a.AddTriple(appendAllTerm, domain.NewNS("rdf").Get("type"), domain.NewNS("acl").Get("Authorization"))
+			a.AddTriple(appendAllTerm, domain.NewNS("rdf").Get("type"), domain.NewNS("acl").Get(constant.HAuthorization))
 			a.AddTriple(appendAllTerm, domain.NewNS("acl").Get("accessTo"), wsTerm)
 			a.AddTriple(appendAllTerm, domain.NewNS("acl").Get("agentClass"), domain.NewNS("foaf").Get("Agent"))
 			a.AddTriple(appendAllTerm, domain.NewNS("acl").Get("mode"), domain.NewNS("acl").Get("Append"))

@@ -50,7 +50,8 @@ type Verifier interface {
 type FilesHandler interface {
 	WriteFile(g *domain.Graph, file *os.File, mime string) error
 	AppendFile(g *domain.Graph, filename string, baseURI string)
-	ReadFile(g *domain.Graph, parser Encoder, filename string)
+	ReadFile(g *domain.Graph, encoder Encoder, filename string)
+	Exists(path string) bool
 }
 
 type URIManipulator interface {

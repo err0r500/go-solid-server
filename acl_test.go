@@ -489,7 +489,7 @@ package gold_test
 //	acl := ParseLinkHeader(response.Header.Get("Link")).MatchRel("acl")
 //	g := NewGraph(testServer.URL + aclDir)
 //	g.Parse(response.Body, "text/turtle")
-//	authz := g.One(nil, nil, ns.acl.Get("Authorization"))
+//	authz := g.One(nil, nil, ns.acl.Get(constant.Authorization))
 //	assert.Nil(t, authz)
 //
 //	request, err = http.NewRequest("GET", testServer.URL+aclDir+"*", nil)
@@ -501,7 +501,7 @@ package gold_test
 //	assert.Equal(t, 200, response.StatusCode)
 //	g = NewGraph(testServer.URL + aclDir)
 //	g.Parse(response.Body, "text/turtle")
-//	authz = g.One(nil, nil, ns.acl.Get("Authorization"))
+//	authz = g.One(nil, nil, ns.acl.Get(constant.Authorization))
 //	assert.Nil(t, authz)
 //
 //	request, err = http.NewRequest("DELETE", acl, nil)

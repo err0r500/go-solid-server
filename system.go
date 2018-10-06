@@ -576,7 +576,7 @@ func newCert(w http.ResponseWriter, req *httpRequest, s *Server) SystemReturn {
 		s.debug.Println("Checking if request is authenticated: " + loggedUser)
 		if len(loggedUser) > 0 && loggedUser == webidURI && strings.HasPrefix(webidURI, resource.Base) {
 			acl := NewWAC(loggedUser, "")
-			aclStatus, err := acl.AllowWrite(req.Header.Get("Origin"), strings.Split(webidURI, "#")[0])
+			aclStatus, err := s.AllowWrite(acl, req.Header.Get("Origin"), strings.Split(webidURI, "#")[0])
 			if aclStatus > 200 || err != nil {
 				return SystemReturn{Status: aclStatus, Body: err.Error()}
 			}

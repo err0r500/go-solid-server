@@ -349,7 +349,7 @@ func (s Server) GetHead(w http.ResponseWriter, req *httpRequest, resource *domai
 	w.Header().Add("Link", s.uriManipulator.Brack("http://www.w3.org/ns/ldp#Resource")+"; rel=\"type\"")
 
 	status := 501
-	aclStatus, err := acl.AllowRead(req.Header.Get("Origin"), resource.URI)
+	aclStatus, err := s.AllowRead(acl, req.Header.Get("Origin"), resource.URI)
 	if aclStatus > 200 || err != nil {
 		return r.respond(aclStatus, s.handleStatusText(aclStatus, err))
 	}
@@ -428,7 +428,7 @@ func (s Server) GetHead(w http.ResponseWriter, req *httpRequest, resource *domai
 					for _, file := range matches {
 						res, err := s.pathInformer.GetPathInfo(resource.Base + "/" + filepath.Dir(resource.Path) + "/" + filepath.Base(file))
 						if !res.IsDir && res.Exists && err == nil {
-							aclStatus, err = acl.AllowRead(req.Header.Get("Origin"), res.URI)
+							aclStatus, err = s.AllowRead(acl, req.Header.Get("Origin"), res.URI)
 							if aclStatus == 200 && err == nil {
 								s.fileHandler.AppendFile(g, res.File, res.URI)
 								g.AddTriple(root, domain.NewResource("http://www.w3.org/ns/ldp#contains"), domain.NewResource(res.URI))
@@ -658,10 +658,10 @@ func (s *Server) Patch(w http.ResponseWriter, req *httpRequest, resource *domain
 	defer unlock()
 
 	// check append first
-	aclAppend, err := acl.AllowAppend(req.Header.Get("Origin"), resource.URI)
+	aclAppend, err := s.AllowAppend(acl, req.Header.Get("Origin"), resource.URI)
 	if aclAppend > 200 || err != nil {
 		// check if we can write then
-		aclWrite, err := acl.AllowWrite(req.Header.Get("Origin"), resource.URI)
+		aclWrite, err := s.AllowWrite(acl, req.Header.Get("Origin"), resource.URI)
 		if aclWrite > 200 || err != nil {
 			return r.respond(aclWrite, s.handleStatusText(aclWrite, err))
 		}
@@ -743,10 +743,10 @@ func (s Server) Post(w http.ResponseWriter, req *httpRequest, resource *domain.P
 	updateURI := resource.URI
 
 	// check append first
-	aclAppend, err := acl.AllowAppend(req.Header.Get("Origin"), resource.URI)
+	aclAppend, err := s.AllowAppend(acl, req.Header.Get("Origin"), resource.URI)
 	if aclAppend > 200 || err != nil {
 		// check if we can write then
-		aclWrite, err := acl.AllowWrite(req.Header.Get("Origin"), resource.URI)
+		aclWrite, err := s.AllowWrite(acl, req.Header.Get("Origin"), resource.URI)
 		if aclWrite > 200 || err != nil {
 			return r.respond(aclWrite, s.handleStatusText(aclWrite, err))
 		}
@@ -969,10 +969,10 @@ func (s Server) Put(w http.ResponseWriter, req *httpRequest, resource *domain.Pa
 	w.Header().Add("Link", s.uriManipulator.Brack("http://www.w3.org/ns/ldp#Resource")+"; rel=\"type\"")
 
 	// check append first
-	aclAppend, err := acl.AllowAppend(req.Header.Get("Origin"), resource.URI)
+	aclAppend, err := s.AllowAppend(acl, req.Header.Get("Origin"), resource.URI)
 	if aclAppend > 200 || err != nil {
 		// check if we can write then
-		aclWrite, err := acl.AllowWrite(req.Header.Get("Origin"), resource.URI)
+		aclWrite, err := s.AllowWrite(acl, req.Header.Get("Origin"), resource.URI)
 		if aclWrite > 200 || err != nil {
 			return r.respond(aclWrite, s.handleStatusText(aclWrite, err))
 		}
@@ -1049,7 +1049,7 @@ func (s Server) Delete(w http.ResponseWriter, req *httpRequest, resource *domain
 	unlock := lock(resource.Path)
 	defer unlock()
 
-	aclWrite, err := acl.AllowWrite(req.Header.Get("Origin"), resource.URI)
+	aclWrite, err := s.AllowWrite(acl, req.Header.Get("Origin"), resource.URI)
 	if aclWrite > 200 || err != nil {
 		return r.respond(aclWrite, s.handleStatusText(aclWrite, err))
 	}
@@ -1084,7 +1084,7 @@ func (s Server) MkCol(w http.ResponseWriter, req *httpRequest, resource *domain.
 	unlock := lock(resource.File)
 	defer unlock()
 
-	aclWrite, err := acl.AllowWrite(req.Header.Get("Origin"), resource.URI)
+	aclWrite, err := s.AllowWrite(acl, req.Header.Get("Origin"), resource.URI)
 	if aclWrite > 200 || err != nil {
 		return r.respond(aclWrite, s.handleStatusText(aclWrite, err))
 	}
@@ -1109,7 +1109,7 @@ func (s Server) MkCol(w http.ResponseWriter, req *httpRequest, resource *domain.
 }
 
 func (s *Server) CopyMoveLockUnlock(w http.ResponseWriter, req *httpRequest, resource *domain.PathInfo, acl WAC) (r *response) {
-	aclWrite, err := acl.AllowWrite(req.Header.Get("Origin"), resource.URI)
+	aclWrite, err := s.AllowWrite(acl, req.Header.Get("Origin"), resource.URI)
 	if aclWrite > 200 || err != nil {
 		return r.respond(aclWrite, s.handleStatusText(aclWrite, err))
 	}
@@ -1151,7 +1151,7 @@ func (s *Server) handle(w http.ResponseWriter, req *httpRequest) (r *response) {
 	req.IsOwner = false
 	resource, _ := s.pathInformer.GetPathInfo(req.BaseURI())
 	if len(user) > 0 {
-		aclStatus, err := acl.AllowWrite(req.Header.Get("Origin"), resource.Base)
+		aclStatus, err := s.AllowWrite(acl, req.Header.Get("Origin"), resource.Base)
 		if aclStatus == 200 && err == nil {
 			req.IsOwner = true
 		}
@@ -1222,19 +1222,19 @@ func (s *Server) handle(w http.ResponseWriter, req *httpRequest) (r *response) {
 	case "OPTIONS":
 		return s.Options(w, req, resource)
 	case "GET", "HEAD":
-		return s.GetHead(w, req, resource, contentType, *acl)
+		return s.GetHead(w, req, resource, contentType, acl)
 	case "PATCH":
-		return s.Patch(w, req, resource, dataHasParser, dataMime, *acl)
+		return s.Patch(w, req, resource, dataHasParser, dataMime, acl)
 	case "POST":
-		return s.Post(w, req, resource, dataHasParser, dataMime, *acl)
+		return s.Post(w, req, resource, dataHasParser, dataMime, acl)
 	case "PUT":
-		return s.Put(w, req, resource, *acl)
+		return s.Put(w, req, resource, acl)
 	case "DELETE":
-		return s.Delete(w, req, resource, *acl)
+		return s.Delete(w, req, resource, acl)
 	case "MKCOL":
-		s.MkCol(w, req, resource, *acl)
+		s.MkCol(w, req, resource, acl)
 	case "COPY", "MOVE", "LOCK", "UNLOCK":
-		s.CopyMoveLockUnlock(w, req, resource, *acl)
+		s.CopyMoveLockUnlock(w, req, resource, acl)
 	default:
 		return r.respond(405, "405 - Method Not Allowed:", req.Method)
 	}

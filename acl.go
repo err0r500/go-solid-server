@@ -6,36 +6,30 @@ import (
 	"strings"
 
 	"github.com/err0r500/go-solid-server/domain"
-	"github.com/err0r500/go-solid-server/uc"
 )
 
 // WAC WebAccessControl object
 type WAC struct {
-	user           string
-	key            string
-	fileHandler    uc.FilesHandler
-	parser         uc.Encoder
-	uriManipulator uc.URIManipulator
-	httpCaller     uc.HttpCaller
-	pathInformer   uc.PathInformer
+	user string
+	key  string
 }
 
 // NewWAC creates a new WAC object
-func NewWAC(user string, key string) *WAC {
-	return &WAC{user: user, key: key} // fixme : instantiate the interfaces
+func NewWAC(user string, key string) WAC {
+	return WAC{user: user, key: key}
 }
 
 // Return an HTTP code and error (200 if authd, 401 if auth required, 403 if not authorized, 500 if error)
-func (acl *WAC) allow(origin string, mode string, path string) (int, error) {
+func (s *Server) allow(acl WAC, origin string, mode string, path string) (int, error) {
 	accessType := "accessTo"
-	p, err := acl.pathInformer.GetPathInfo(path)
+	p, err := s.pathInformer.GetPathInfo(path)
 	if err != nil {
 		return 500, err
 	}
 	depth := strings.Split(p.Path, "/")
 
 	for d := len(depth); d >= 0; d-- {
-		p, err := acl.pathInformer.GetPathInfo(path)
+		p, err := s.pathInformer.GetPathInfo(path)
 		if err != nil {
 			return 500, err
 		}
@@ -44,7 +38,7 @@ func (acl *WAC) allow(origin string, mode string, path string) (int, error) {
 		//acl.srv.debug.Println("Looking for policies in " + p.AclFile)
 
 		aclGraph := domain.NewGraph(p.AclURI)
-		acl.fileHandler.ReadFile(aclGraph, acl.parser, p.AclFile)
+		s.fileHandler.ReadFile(aclGraph, s.parser, p.AclFile)
 		if aclGraph.Len() > 0 {
 			//acl.srv.debug.Println("Found policies in " + p.AclFile)
 			// TODO make it more elegant instead of duplicating code
@@ -77,9 +71,9 @@ func (acl *WAC) allow(origin string, mode string, path string) (int, error) {
 							return 200, nil
 						}
 
-						groupURI := acl.uriManipulator.Debrack(t.Object.String())
+						groupURI := s.uriManipulator.Debrack(t.Object.String())
 						groupGraph := domain.NewGraph(groupURI)
-						acl.httpCaller.LoadURI(groupGraph, groupURI)
+						s.httpCaller.LoadURI(groupGraph, groupURI)
 						if groupGraph.Len() > 0 && groupGraph.One(t.Object, domain.NewNS("rdf").Get("type"), domain.NewNS("foaf").Get("Group")) != nil {
 							for range groupGraph.All(t.Object, domain.NewNS("foaf").Get("member"), domain.NewResource(acl.user)) {
 								//acl.srv.debug.Println(acl.user + " listed as a member of the group " + groupURI)
@@ -97,7 +91,7 @@ func (acl *WAC) allow(origin string, mode string, path string) (int, error) {
 					if len(origin) > 0 && len(origins) > 0 {
 						//acl.srv.debug.Println("Origin set to: " + acl.uriManipulator.Brack(origin))
 						for _, o := range origins {
-							if acl.uriManipulator.Brack(origin) == o.Object.String() {
+							if s.uriManipulator.Brack(origin) == o.Object.String() {
 								//acl.srv.debug.Println("Found policy for origin: " + o.Object.String())
 								goto allowOrigin
 							}
@@ -132,9 +126,9 @@ func (acl *WAC) allow(origin string, mode string, path string) (int, error) {
 							//acl.srv.debug.Println(mode + " access allowed as FOAF Agent")
 							return 200, nil
 						}
-						groupURI := acl.uriManipulator.Debrack(t.Object.String())
+						groupURI := s.uriManipulator.Debrack(t.Object.String())
 						groupGraph := domain.NewGraph(groupURI)
-						acl.httpCaller.LoadURI(groupGraph, groupURI)
+						s.httpCaller.LoadURI(groupGraph, groupURI)
 						if groupGraph.Len() > 0 && groupGraph.One(t.Object, domain.NewNS("rdf").Get("type"), domain.NewNS("foaf").Get("Group")) != nil {
 							for range groupGraph.All(t.Object, domain.NewNS("foaf").Get("member"), domain.NewResource(acl.user)) {
 								//acl.srv.debug.Println(acl.user + " listed as a member of the group " + groupURI)
@@ -189,34 +183,34 @@ func walkPath(base string, depth []string) string {
 }
 
 // AllowRead checks if Read access is allowed
-func (acl *WAC) AllowRead(origin, path string) (int, error) {
-	return acl.allow(origin, "Read", path)
+func (s *Server) AllowRead(acl WAC, origin, path string) (int, error) {
+	return s.allow(acl, origin, "Read", path)
 }
 
 // AllowWrite checks if Write access is allowed
-func (acl *WAC) AllowWrite(origin, path string) (int, error) {
-	return acl.allow(origin, "Write", path)
+func (s *Server) AllowWrite(acl WAC, origin, path string) (int, error) {
+	return s.allow(acl, origin, "Write", path)
 }
 
 // AllowAppend checks if Append access is allowed
-func (acl *WAC) AllowAppend(origin, path string) (int, error) {
-	return acl.allow(origin, "Append", path)
+func (s *Server) AllowAppend(acl WAC, origin, path string) (int, error) {
+	return s.allow(acl, origin, "Append", path)
 }
 
 // AllowControl checks if Control access is allowed
-func (acl *WAC) AllowControl(origin, path string) (int, error) {
-	return acl.allow(origin, "Control", path)
+func (s *Server) AllowControl(acl WAC, origin, path string) (int, error) {
+	return s.allow(acl, origin, "Control", path)
 }
 
-func (acl *WAC) VerifyDelegator(delegator string, delegatee string) bool {
+func (s *Server) VerifyDelegator(delegator string, delegatee string) bool {
 	g := domain.NewGraph(delegator)
-	err := acl.httpCaller.LoadURI(g, delegator)
+	err := s.httpCaller.LoadURI(g, delegator)
 	if err != nil {
 		log.Println("Error loading graph for " + delegator)
 	}
 
 	for _, val := range g.All(domain.NewResource(delegator), domain.NewResource("http://www.w3.org/ns/auth/acl#delegates"), nil) {
-		if acl.uriManipulator.Debrack(val.Object.String()) == delegatee {
+		if s.uriManipulator.Debrack(val.Object.String()) == delegatee {
 			return true
 		}
 	}

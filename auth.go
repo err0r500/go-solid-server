@@ -56,7 +56,7 @@ func (s *Server) authn(req *httpRequest, w http.ResponseWriter) string {
 	if len(user) > 0 {
 		if len(req.Header.Get("On-Behalf-Of")) > 0 {
 			delegator := s.uriManipulator.Debrack(req.Header.Get("On-Behalf-Of"))
-			if req.wac.VerifyDelegator(delegator, user) {
+			if s.VerifyDelegator(delegator, user) {
 				//req.Server.debug.Println("Setting delegation user to:", delegator)
 				user = delegator
 			}

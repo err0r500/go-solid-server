@@ -17,7 +17,7 @@ package gold
 //	response, err := httpClient.Do(request)
 //	assert.NoError(t, err)
 //	assert.Equal(t, 200, response.StatusCode)
-//	assert.Contains(t, response.Header.Get("Content-Type"), "text/turtle")
+//	assert.Contains(t, response.Header.Get("Content-Type"), constant.TextTurtle)
 //	assert.Equal(t, "example.org", response.Header.Get("Access-Control-Allow-Origin"))
 //	body, err := ioutil.ReadAll(response.Body)
 //	assert.NoError(t, err)

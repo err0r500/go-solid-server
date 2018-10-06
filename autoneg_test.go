@@ -54,7 +54,7 @@ func TestNegotiateRDF(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	assert.Equal(t, "text/turtle", contentType)
+	assert.Equal(t, constant.TextTurtle, contentType)
 }
 
 func TestNegotiateFirstMatch(t *testing.T) {

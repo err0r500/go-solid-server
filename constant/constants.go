@@ -21,6 +21,7 @@ const (
 	TextPlain       = "text/plain"
 	TextHtml        = "text/html"
 	TextN3          = "text/n3"
+	TextTurtle      = "text/turtle"
 	ApplicationJSON = "application/json"
 
 	HAuthorization = "HAuthorization"

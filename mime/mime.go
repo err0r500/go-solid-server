@@ -27,7 +27,7 @@ var MimeParser = map[string]string{
 }
 
 var MimeRdfExt = map[string]string{
-	".ttl":    "text/turtle",
+	".ttl":    constant.TextTurtle,
 	".n3":     constant.TextN3,
 	".rdf":    "application/rdf+xml",
 	".jsonld": "application/ld+json",
@@ -59,7 +59,7 @@ func init() {
 		}
 		MimeParser[syntax.MimeType] = syntax.Name
 	}
-	MimeParser[constant.TextN3] = MimeParser["text/turtle"]
+	MimeParser[constant.TextN3] = MimeParser[constant.TextTurtle]
 
 	for name, syntax := range crdf.SerializerSyntax {
 		switch name {

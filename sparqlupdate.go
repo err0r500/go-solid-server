@@ -8,6 +8,7 @@ import (
 	"strings"
 	"text/scanner"
 
+	"github.com/err0r500/go-solid-server/constant"
 	"github.com/err0r500/go-solid-server/encoder"
 
 	"github.com/err0r500/go-solid-server/domain"
@@ -72,7 +73,7 @@ func (sparql *SPARQLUpdate) Parse(src io.Reader) error {
 					graph: *domain.NewGraph(sparql.baseURI),
 					verb:  verb,
 				}
-				sparql.parser.Parse(&query.graph, strings.NewReader(query.body), "text/turtle")
+				sparql.parser.Parse(&query.graph, strings.NewReader(query.body), constant.TextTurtle)
 				sparql.queries = append(sparql.queries, query)
 			}
 

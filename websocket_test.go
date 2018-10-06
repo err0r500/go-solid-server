@@ -96,7 +96,7 @@ package gold
 //
 //	request, err := http.NewRequest("PUT", resURL, strings.NewReader("<a> <b> <c>."))
 //	assert.NoError(t, err)
-//	request.Header.Add("Content-Type", "text/turtle")
+//	request.Header.Add("Content-Type", constant.TextTurtle)
 //	response, err := httpClient.Do(request)
 //	assert.NoError(t, err)
 //	assert.Equal(t, 201, response.StatusCode)
@@ -108,7 +108,7 @@ package gold
 //
 //	request, err = http.NewRequest("POST", testServerWs.URL+"/", nil)
 //	assert.NoError(t, err)
-//	request.Header.Add("Content-Type", "text/turtle")
+//	request.Header.Add("Content-Type", constant.TextTurtle)
 //	request.Header.Add("Link", "<http://www.w3.org/ns/ldp#BasicContainer>; rel=\"type\"")
 //	request.Header.Add("Slug", "dir")
 //	response, err = httpClient.Do(request)
@@ -137,7 +137,7 @@ package gold
 //
 //	request, err = http.NewRequest("POST", testServerWs.URL+"/", nil)
 //	assert.NoError(t, err)
-//	request.Header.Add("Content-Type", "text/turtle")
+//	request.Header.Add("Content-Type", constant.TextTurtle)
 //	request.Header.Add("Slug", "res")
 //	response, err = httpClient.Do(request)
 //	assert.NoError(t, err)

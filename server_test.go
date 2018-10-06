@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/err0r500/go-solid-server/constant"
 	"github.com/err0r500/go-solid-server/encoder"
 
 	gold "github.com/err0r500/go-solid-server"
@@ -22,17 +23,17 @@ func TestGraphPatch(t *testing.T) {
 
 	s := gold.Server{}
 	s.JSONPatch(graph, strings.NewReader(`{"a":{"b":[{"type":"uri","value":"c"}]}}`))
-	buf, err = h.Serialize(graph, "text/turtle")
+	buf, err = h.Serialize(graph, constant.TextTurtle)
 	assert.Nil(t, err)
 	assert.Equal(t, buf, "@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .\n\n<a>\n    <b> <c> .\n\n")
 
 	s.JSONPatch(graph, strings.NewReader(`{"a":{"b":[{"type":"uri","value":"c2"}]}}`))
-	buf, err = h.Serialize(graph, "text/turtle")
+	buf, err = h.Serialize(graph, constant.TextTurtle)
 	assert.Nil(t, err)
 	assert.Equal(t, buf, "@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .\n\n<a>\n    <b> <c2> .\n\n")
 
 	s.JSONPatch(graph, strings.NewReader(`{"a":{"b2":[{"type":"uri","value":"c2"}]}}`))
-	buf, err = h.Serialize(graph, "text/turtle")
+	buf, err = h.Serialize(graph, constant.TextTurtle)
 	assert.Nil(t, err)
 	assert.Equal(t, buf, "@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .\n\n<a>\n    <b> <c2> ;\n    <b2> <c2> .\n\n")
 }
@@ -102,7 +103,7 @@ func TestGraphPatch(t *testing.T) {
 //
 //	request, err = http.NewRequest("PUT", testServer.URL+"/_test/abc", strings.NewReader("<a> <b> <c>."))
 //	assert.NoError(t, err)
-//	request.Header.Add("Content-Type", "text/turtle")
+//	request.Header.Add("Content-Type", constant.TextTurtle)
 //	response, err = httpClient.Do(request)
 //	assert.NoError(t, err)
 //	assert.Equal(t, 201, response.StatusCode)
@@ -123,7 +124,7 @@ func TestGraphPatch(t *testing.T) {
 //func TestOPTIONS(t *testing.T) {
 //	request, err := http.NewRequest("OPTIONS", testServer.URL+"/", nil)
 //	assert.NoError(t, err)
-//	request.Header.Add("Accept", "text/turtle")
+//	request.Header.Add("Accept", constant.TextTurtle)
 //	request.Header.Add("Access-Control-Request-Method", "PATCH")
 //	response, err := httpClient.Do(request)
 //	assert.NoError(t, err)
@@ -137,7 +138,7 @@ func TestGraphPatch(t *testing.T) {
 //	origin := "http://localhost:1234"
 //	request, err := http.NewRequest("OPTIONS", testServer.URL+"/", nil)
 //	assert.NoError(t, err)
-//	request.Header.Add("Accept", "text/turtle")
+//	request.Header.Add("Accept", constant.TextTurtle)
 //	request.Header.Add("Origin", origin)
 //	response, err := httpClient.Do(request)
 //	assert.NoError(t, err)
@@ -148,7 +149,7 @@ func TestGraphPatch(t *testing.T) {
 //func TestURIwithSpaces(t *testing.T) {
 //	request, err := http.NewRequest("PUT", testServer.URL+"/_test/file name", nil)
 //	assert.NoError(t, err)
-//	request.Header.Add("Content-Type", "text/turtle")
+//	request.Header.Add("Content-Type", constant.TextTurtle)
 //	response, err := httpClient.Do(request)
 //	assert.NoError(t, err)
 //	assert.Equal(t, 201, response.StatusCode)
@@ -163,7 +164,7 @@ func TestGraphPatch(t *testing.T) {
 //func TestURIwithWeirdChars(t *testing.T) {
 //	request, err := http.NewRequest("PUT", testServer.URL+"/_test/file name + %23frag", nil)
 //	assert.NoError(t, err)
-//	request.Header.Add("Content-Type", "text/turtle")
+//	request.Header.Add("Content-Type", constant.TextTurtle)
 //	response, err := httpClient.Do(request)
 //	assert.NoError(t, err)
 //	assert.Equal(t, 201, response.StatusCode)
@@ -340,7 +341,7 @@ func TestGraphPatch(t *testing.T) {
 //func TestLDPPUTContainer(t *testing.T) {
 //	request, err := http.NewRequest("PUT", testServer.URL+"/_test/", nil)
 //	assert.NoError(t, err)
-//	request.Header.Add("Content-Type", "text/turtle")
+//	request.Header.Add("Content-Type", constant.TextTurtle)
 //	response, err := httpClient.Do(request)
 //	assert.NoError(t, err)
 //	assert.Equal(t, 406, response.StatusCode)
@@ -351,7 +352,7 @@ func TestGraphPatch(t *testing.T) {
 //	request, err = http.NewRequest("PUT", testServer.URL+"/_test/dir", nil)
 //	assert.NoError(t, err)
 //	request.Header.Add("Link", "<http://www.w3.org/ns/ldp#BasicContainer>; rel=\"type\"")
-//	request.Header.Add("Content-Type", "text/turtle")
+//	request.Header.Add("Content-Type", constant.TextTurtle)
 //	response, err = httpClient.Do(request)
 //	assert.NoError(t, err)
 //	assert.Equal(t, 201, response.StatusCode)
@@ -372,7 +373,7 @@ func TestGraphPatch(t *testing.T) {
 //func TestLDPPostLDPC(t *testing.T) {
 //	request, err := http.NewRequest("POST", testServer.URL+"/_test/", strings.NewReader("@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> .\n\n<> a <http://example.org/ldpc>."))
 //	assert.NoError(t, err)
-//	request.Header.Add("Content-Type", "text/turtle")
+//	request.Header.Add("Content-Type", constant.TextTurtle)
 //	request.Header.Add("Slug", "ldpc")
 //	request.Header.Add("Link", "<http://www.w3.org/ns/ldp#BasicContainer>; rel=\"type\"")
 //	response, err := httpClient.Do(request)
@@ -388,7 +389,7 @@ func TestGraphPatch(t *testing.T) {
 //
 //	request, err = http.NewRequest("GET", testServer.URL+"/_test/", nil)
 //	assert.NoError(t, err)
-//	request.Header.Add("Accept", "text/turtle")
+//	request.Header.Add("Accept", constant.TextTurtle)
 //	response, err = httpClient.Do(request)
 //	assert.NoError(t, err)
 //	assert.Equal(t, 200, response.StatusCode)
@@ -397,13 +398,13 @@ func TestGraphPatch(t *testing.T) {
 //	response.Body.Close()
 //
 //	g := NewGraph(testServer.URL + "/_test/")
-//	g.Parse(strings.NewReader(string(body)), "text/turtle")
+//	g.Parse(strings.NewReader(string(body)), constant.TextTurtle)
 //	assert.NotNil(t, g.One(NewResource(testServer.URL+"/_test/"), NewResource("http://www.w3.org/ns/ldp#contains"), NewResource(newLDPC)))
 //	assert.NotNil(t, g.One(NewResource(newLDPC), NewResource("http://www.w3.org/1999/02/22-rdf-syntax-ns#type"), NewResource("http://example.org/ldpc")))
 //	assert.NotNil(t, g.One(NewResource(newLDPC), NewResource("http://www.w3.org/1999/02/22-rdf-syntax-ns#type"), NewResource("http://www.w3.org/ns/ldp#BasicContainer")))
 //	request, err = http.NewRequest("HEAD", metaURI, nil)
 //	assert.NoError(t, err)
-//	request.Header.Add("Accept", "text/turtle")
+//	request.Header.Add("Accept", constant.TextTurtle)
 //	response, err = httpClient.Do(request)
 //	response.Body.Close()
 //	assert.Equal(t, 200, response.StatusCode)
@@ -428,7 +429,7 @@ func TestGraphPatch(t *testing.T) {
 //func TestLDPPostLDPRWithSlug(t *testing.T) {
 //	request, err := http.NewRequest("POST", testServer.URL+"/_test/", strings.NewReader("@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .\n\n<> a <http://example.org/two>."))
 //	assert.NoError(t, err)
-//	request.Header.Add("Content-Type", "text/turtle")
+//	request.Header.Add("Content-Type", constant.TextTurtle)
 //	request.Header.Add("Slug", "ldpr")
 //	request.Header.Add("Link", "<http://www.w3.org/ns/ldp#Resource>; rel=\"type\"")
 //	response, err := httpClient.Do(request)
@@ -439,7 +440,7 @@ func TestGraphPatch(t *testing.T) {
 //
 //	request, err = http.NewRequest("GET", oldLDPR, nil)
 //	assert.NoError(t, err)
-//	request.Header.Add("Accept", "text/turtle")
+//	request.Header.Add("Accept", constant.TextTurtle)
 //	response, err = httpClient.Do(request)
 //	assert.NoError(t, err)
 //	assert.Equal(t, 200, response.StatusCode)
@@ -450,7 +451,7 @@ func TestGraphPatch(t *testing.T) {
 //
 //	request, err = http.NewRequest("POST", testServer.URL+"/_test/", nil)
 //	assert.NoError(t, err)
-//	request.Header.Add("Content-Type", "text/turtle")
+//	request.Header.Add("Content-Type", constant.TextTurtle)
 //	request.Header.Add("Slug", "ldpr")
 //	request.Header.Add("Link", "<http://www.w3.org/ns/ldp#Resource>; rel=\"type\"")
 //	response, err = httpClient.Do(request)
@@ -477,7 +478,7 @@ func TestGraphPatch(t *testing.T) {
 //
 //func TestLDPPostLDPRNoSlug(t *testing.T) {
 //	request, err := http.NewRequest("POST", testServer.URL+"/_test/", strings.NewReader("@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .\n\n<> a <http://example.org/two>."))
-//	request.Header.Add("Content-Type", "text/turtle")
+//	request.Header.Add("Content-Type", constant.TextTurtle)
 //	request.Header.Add("Link", "<http://www.w3.org/ns/ldp#Resource>; rel=\"type\"")
 //	response, err := httpClient.Do(request)
 //	response.Body.Close()
@@ -486,7 +487,7 @@ func TestGraphPatch(t *testing.T) {
 //	newLDPR := response.Header.Get("Location")
 //
 //	request, err = http.NewRequest("GET", newLDPR, nil)
-//	request.Header.Add("Accept", "text/turtle")
+//	request.Header.Add("Accept", constant.TextTurtle)
 //	response, err = httpClient.Do(request)
 //	assert.NoError(t, err)
 //	assert.Equal(t, 200, response.StatusCode)
@@ -515,7 +516,7 @@ func TestGraphPatch(t *testing.T) {
 //	response, err = httpClient.Do(request)
 //	assert.NoError(t, err)
 //
-//	assert.Equal(t, "text/turtle", response.Header.Get("Content-Type"))
+//	assert.Equal(t, constant.TextTurtle, response.Header.Get("Content-Type"))
 //
 //	request, err = http.NewRequest("DELETE", resource_url, nil)
 //	assert.NoError(t, err)
@@ -533,7 +534,7 @@ func TestGraphPatch(t *testing.T) {
 //
 //	request, err = http.NewRequest("PUT", meta, strings.NewReader("@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .\n\n<> a <http://example.org/two>."))
 //	assert.NoError(t, err)
-//	request.Header.Add("Content-Type", "text/turtle")
+//	request.Header.Add("Content-Type", constant.TextTurtle)
 //	response, err = httpClient.Do(request)
 //	assert.NoError(t, err)
 //	response.Body.Close()
@@ -542,7 +543,7 @@ func TestGraphPatch(t *testing.T) {
 //
 //	request, err = http.NewRequest("GET", testServer.URL+"/_test/", nil)
 //	assert.NoError(t, err)
-//	request.Header.Add("Accept", "text/turtle")
+//	request.Header.Add("Accept", constant.TextTurtle)
 //	response, err = httpClient.Do(request)
 //	assert.NoError(t, err)
 //	assert.Equal(t, 200, response.StatusCode)
@@ -551,7 +552,7 @@ func TestGraphPatch(t *testing.T) {
 //	response.Body.Close()
 //
 //	g := NewGraph(testServer.URL + "/_test/")
-//	g.Parse(strings.NewReader(string(body)), "text/turtle")
+//	g.Parse(strings.NewReader(string(body)), constant.TextTurtle)
 //	assert.Nil(t, g.One(NewResource(meta), nil, nil))
 //	assert.NotNil(t, g.One(NewResource(testServer.URL+"/_test/"), NewResource("http://www.w3.org/1999/02/22-rdf-syntax-ns#type"), NewResource("http://www.w3.org/ns/ldp#BasicContainer")))
 //
@@ -565,7 +566,7 @@ func TestGraphPatch(t *testing.T) {
 //func TestLDPPreferContainmentHeader(t *testing.T) {
 //	request, err := http.NewRequest("GET", testServer.URL+"/_test/", nil)
 //	assert.NoError(t, err)
-//	request.Header.Add("Accept", "text/turtle")
+//	request.Header.Add("Accept", constant.TextTurtle)
 //	request.Header.Add("Prefer", "return=representation; omit=\"http://www.w3.org/ns/ldp#PreferEmptyContainer\", return=representation; include=\"http://www.w3.org/ns/ldp#PreferContainment\"")
 //	response, err := httpClient.Do(request)
 //	assert.NoError(t, err)
@@ -576,12 +577,12 @@ func TestGraphPatch(t *testing.T) {
 //
 //	body, err := ioutil.ReadAll(response.Body)
 //	response.Body.Close()
-//	g.Parse(strings.NewReader(string(body)), "text/turtle")
+//	g.Parse(strings.NewReader(string(body)), constant.TextTurtle)
 //	assert.NotNil(t, g.One(NewResource(testServer.URL+"/_test/"), NewResource("http://www.w3.org/ns/ldp#contains"), nil))
 //
 //	request, err = http.NewRequest("GET", testServer.URL+"/_test/", nil)
 //	assert.NoError(t, err)
-//	request.Header.Add("Accept", "text/turtle")
+//	request.Header.Add("Accept", constant.TextTurtle)
 //	request.Header.Add("Prefer", "return=representation; include=\"http://www.w3.org/ns/ldp#PreferEmptyContainer\", return=representation; omit=\"http://www.w3.org/ns/ldp#PreferContainment\"")
 //	response, err = httpClient.Do(request)
 //	assert.NoError(t, err)
@@ -591,14 +592,14 @@ func TestGraphPatch(t *testing.T) {
 //	body, err = ioutil.ReadAll(response.Body)
 //	response.Body.Close()
 //	g = NewGraph(testServer.URL + "/_test/")
-//	g.Parse(strings.NewReader(string(body)), "text/turtle")
+//	g.Parse(strings.NewReader(string(body)), constant.TextTurtle)
 //	assert.Nil(t, g.One(NewResource(testServer.URL+"/_test/"), NewResource("http://www.w3.org/ns/ldp#contains"), nil))
 //}
 //
 //func TestLDPPreferEmptyHeader(t *testing.T) {
 //	request, err := http.NewRequest("GET", testServer.URL+"/_test/", nil)
 //	assert.NoError(t, err)
-//	request.Header.Add("Accept", "text/turtle")
+//	request.Header.Add("Accept", constant.TextTurtle)
 //	request.Header.Add("Prefer", "return=representation; omit=\"http://www.w3.org/ns/ldp#PreferEmptyContainer\"")
 //	response, err := httpClient.Do(request)
 //	assert.NoError(t, err)
@@ -608,12 +609,12 @@ func TestGraphPatch(t *testing.T) {
 //	g := NewGraph(testServer.URL + "/_test/")
 //	body, err := ioutil.ReadAll(response.Body)
 //	response.Body.Close()
-//	g.Parse(strings.NewReader(string(body)), "text/turtle")
+//	g.Parse(strings.NewReader(string(body)), constant.TextTurtle)
 //	assert.NotNil(t, g.One(NewResource(testServer.URL+"/_test/abc"), nil, nil))
 //
 //	request, err = http.NewRequest("GET", testServer.URL+"/_test/", nil)
 //	assert.NoError(t, err)
-//	request.Header.Add("Accept", "text/turtle")
+//	request.Header.Add("Accept", constant.TextTurtle)
 //	request.Header.Add("Prefer", "return=representation; include=\"http://www.w3.org/ns/ldp#PreferEmptyContainer\"")
 //	response, err = httpClient.Do(request)
 //	assert.NoError(t, err)
@@ -623,7 +624,7 @@ func TestGraphPatch(t *testing.T) {
 //	g = NewGraph(testServer.URL + "/_test/")
 //	body, err = ioutil.ReadAll(response.Body)
 //	response.Body.Close()
-//	g.Parse(strings.NewReader(string(body)), "text/turtle")
+//	g.Parse(strings.NewReader(string(body)), constant.TextTurtle)
 //	assert.Nil(t, g.One(NewResource("/_test/abc"), nil, nil))
 //}
 //
@@ -708,14 +709,14 @@ func TestGraphPatch(t *testing.T) {
 //	}()
 //	request, err := http.NewRequest("PUT", testServer.URL+"/_test/abc", strings.NewReader("<a> <b> <c> ."))
 //	assert.NoError(t, err)
-//	request.Header.Add("Content-Type", "text/turtle")
+//	request.Header.Add("Content-Type", constant.TextTurtle)
 //	response, err := httpClient.Do(request)
 //	assert.NoError(t, err)
 //	assert.Equal(t, 200, response.StatusCode)
 //
 //	request, err = http.NewRequest("GET", testServer.URL+"/_test/abc", nil)
 //	assert.NoError(t, err)
-//	request.Header.Add("Content-Type", "text/turtle")
+//	request.Header.Add("Content-Type", constant.TextTurtle)
 //	response, err = httpClient.Do(request)
 //	assert.NoError(t, err)
 //	body, err := ioutil.ReadAll(response.Body)
@@ -749,21 +750,21 @@ func TestGraphPatch(t *testing.T) {
 //func TestPOSTTurtle(t *testing.T) {
 //	request, err := http.NewRequest("POST", testServer.URL+"/_test/abc", strings.NewReader("<a> <b> <c1> ."))
 //	assert.NoError(t, err)
-//	request.Header.Add("Content-Type", "text/turtle")
+//	request.Header.Add("Content-Type", constant.TextTurtle)
 //	response, err := httpClient.Do(request)
 //	assert.NoError(t, err)
 //	assert.Equal(t, 200, response.StatusCode)
 //
 //	request, err = http.NewRequest("POST", testServer.URL+"/_test/abc", strings.NewReader("<a> <b> <c2> ."))
 //	assert.NoError(t, err)
-//	request.Header.Add("Content-Type", "text/turtle")
+//	request.Header.Add("Content-Type", constant.TextTurtle)
 //	response, err = httpClient.Do(request)
 //	assert.NoError(t, err)
 //	assert.Equal(t, 200, response.StatusCode)
 //
 //	request, err = http.NewRequest("GET", testServer.URL+"/_test/abc", nil)
 //	assert.NoError(t, err)
-//	request.Header.Add("Accept", "text/turtle")
+//	request.Header.Add("Accept", constant.TextTurtle)
 //	response, err = httpClient.Do(request)
 //	assert.NoError(t, err)
 //	assert.Equal(t, 200, response.StatusCode)
@@ -782,7 +783,7 @@ func TestGraphPatch(t *testing.T) {
 //
 //	request, err = http.NewRequest("GET", testServer.URL+"/_test/abc", nil)
 //	assert.NoError(t, err)
-//	request.Header.Add("Accept", "text/turtle")
+//	request.Header.Add("Accept", constant.TextTurtle)
 //	response, err = httpClient.Do(request)
 //	assert.NoError(t, err)
 //	assert.Equal(t, 200, response.StatusCode)
@@ -860,7 +861,7 @@ func TestGraphPatch(t *testing.T) {
 //	g := NewGraph(testServer.URL + "/" + file)
 //	g.ReadFile(file)
 //	assert.Equal(t, 1, g.Len())
-//	data, err := g.serialize(("text/turtle"))
+//	data, err := g.serialize((constant.TextTurtle))
 //	assert.NoError(t, err)
 //	assert.Equal(t, "@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .\n\n<a>\n    <b> <c> .\n\n", data)
 //
@@ -877,7 +878,7 @@ func TestGraphPatch(t *testing.T) {
 //
 //	request, err = http.NewRequest("PUT", testServer.URL+"/_test/abc", strings.NewReader("<d> <e> <f> ; <h> <i> ."))
 //	assert.NoError(t, err)
-//	request.Header.Add("Content-Type", "text/turtle")
+//	request.Header.Add("Content-Type", constant.TextTurtle)
 //	response, err = httpClient.Do(request)
 //	assert.NoError(t, err)
 //	assert.Equal(t, 201, response.StatusCode)
@@ -887,7 +888,7 @@ func TestGraphPatch(t *testing.T) {
 //	assert.NotEmpty(t, response.Header.Get("Location"))
 //
 //	request, err = http.NewRequest("GET", testServer.URL+"/_test/abc", nil)
-//	request.Header.Add("Accept", "text/turtle")
+//	request.Header.Add("Accept", constant.TextTurtle)
 //	response, err = httpClient.Do(request)
 //	assert.NoError(t, err)
 //	assert.Equal(t, 200, response.StatusCode)
@@ -923,7 +924,7 @@ func TestGraphPatch(t *testing.T) {
 //	response.Body.Close()
 //	assert.Empty(t, string(body))
 //	assert.NotEmpty(t, response.Header.Get("Content-Length"))
-//	assert.Equal(t, response.Header.Get("Content-Type"), "text/turtle")
+//	assert.Equal(t, response.Header.Get("Content-Type"), constant.TextTurtle)
 //}
 //
 //func TestGetUnsupportedMediaType(t *testing.T) {
@@ -955,7 +956,7 @@ func TestGraphPatch(t *testing.T) {
 //	assert.NoError(t, err)
 //	assert.NotEmpty(t, response.Body)
 //	assert.Equal(t, 200, response.StatusCode)
-//	assert.Contains(t, "text/turtle", response.Header.Get("Content-Type"))
+//	assert.Contains(t, constant.TextTurtle, response.Header.Get("Content-Type"))
 //	assert.NotEqual(t, "0", response.Header.Get("Content-Length"))
 //}
 //
@@ -997,7 +998,7 @@ func TestGraphPatch(t *testing.T) {
 //
 //	request, err = http.NewRequest("PATCH", testServer.URL+"/_test/abc", strings.NewReader("<d> <e> <f> ."))
 //	assert.NoError(t, err)
-//	request.Header.Add("Content-Type", "text/turtle")
+//	request.Header.Add("Content-Type", constant.TextTurtle)
 //	request.Header.Add("If-Match", newTag)
 //	response, err = httpClient.Do(request)
 //	assert.NoError(t, err)
@@ -1005,7 +1006,7 @@ func TestGraphPatch(t *testing.T) {
 //
 //	request, err = http.NewRequest("POST", testServer.URL+"/_test/abc", strings.NewReader("<d> <e> <f> ."))
 //	assert.NoError(t, err)
-//	request.Header.Add("Content-Type", "text/turtle")
+//	request.Header.Add("Content-Type", constant.TextTurtle)
 //	request.Header.Add("If-Match", newTag)
 //	response, err = httpClient.Do(request)
 //	assert.NoError(t, err)
@@ -1013,7 +1014,7 @@ func TestGraphPatch(t *testing.T) {
 //
 //	request, err = http.NewRequest("PUT", testServer.URL+"/_test/abc", strings.NewReader("<d> <e> <f> ."))
 //	assert.NoError(t, err)
-//	request.Header.Add("Content-Type", "text/turtle")
+//	request.Header.Add("Content-Type", constant.TextTurtle)
 //	response, err = httpClient.Do(request)
 //	assert.NoError(t, err)
 //	body, err := ioutil.ReadAll(response.Body)
@@ -1071,7 +1072,7 @@ func TestGraphPatch(t *testing.T) {
 //
 //	request, err = http.NewRequest("PUT", testServer.URL+"/_test/abc", strings.NewReader("<d> <e> <f> ."))
 //	assert.NoError(t, err)
-//	request.Header.Add("Accept", "text/turtle")
+//	request.Header.Add("Accept", constant.TextTurtle)
 //	request.Header.Add("If-None-Match", ETag)
 //	response, err = httpClient.Do(request)
 //	assert.NoError(t, err)
@@ -1079,7 +1080,7 @@ func TestGraphPatch(t *testing.T) {
 //
 //	request, err = http.NewRequest("POST", testServer.URL+"/_test/abc", strings.NewReader("<d> <e> <f> ."))
 //	assert.NoError(t, err)
-//	request.Header.Add("Accept", "text/turtle")
+//	request.Header.Add("Accept", constant.TextTurtle)
 //	request.Header.Add("If-None-Match", ETag)
 //	response, err = httpClient.Do(request)
 //	assert.NoError(t, err)
@@ -1087,7 +1088,7 @@ func TestGraphPatch(t *testing.T) {
 //
 //	request, err = http.NewRequest("PATCH", testServer.URL+"/_test/abc", strings.NewReader("<d> <e> <f> ."))
 //	assert.NoError(t, err)
-//	request.Header.Add("Accept", "text/turtle")
+//	request.Header.Add("Accept", constant.TextTurtle)
 //	request.Header.Add("If-None-Match", ETag)
 //	response, err = httpClient.Do(request)
 //	assert.NoError(t, err)
@@ -1095,7 +1096,7 @@ func TestGraphPatch(t *testing.T) {
 //
 //	request, err = http.NewRequest("PUT", testServer.URL+"/_test/abc", strings.NewReader("<d> <e> <f> ."))
 //	assert.NoError(t, err)
-//	request.Header.Add("Accept", "text/turtle")
+//	request.Header.Add("Accept", constant.TextTurtle)
 //	request.Header.Add("If-None-Match", newTag)
 //	response, err = httpClient.Do(request)
 //	assert.NoError(t, err)
@@ -1182,7 +1183,7 @@ func TestGraphPatch(t *testing.T) {
 //
 //	request, err = http.NewRequest("POST", testServer.URL+"/_test/abc", strings.NewReader("@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .\n\n<> a <http://example.org/abc> ."))
 //	assert.NoError(t, err)
-//	request.Header.Add("Content-Type", "text/turtle")
+//	request.Header.Add("Content-Type", constant.TextTurtle)
 //	response, err = httpClient.Do(request)
 //	response.Body.Close()
 //	assert.NoError(t, err)
@@ -1190,7 +1191,7 @@ func TestGraphPatch(t *testing.T) {
 //
 //	request, err = http.NewRequest("GET", testServer.URL+"/_test/", nil)
 //	assert.NoError(t, err)
-//	request.Header.Add("Accept", "text/turtle")
+//	request.Header.Add("Accept", constant.TextTurtle)
 //	response, err = httpClient.Do(request)
 //	assert.NoError(t, err)
 //	assert.Equal(t, 200, response.StatusCode)
@@ -1198,7 +1199,7 @@ func TestGraphPatch(t *testing.T) {
 //	g := NewGraph(testServer.URL + "/_test/")
 //	body, err := ioutil.ReadAll(response.Body)
 //	response.Body.Close()
-//	g.Parse(strings.NewReader(string(body)), "text/turtle")
+//	g.Parse(strings.NewReader(string(body)), constant.TextTurtle)
 //
 //	f := NewResource(testServer.URL + "/_test/abc")
 //	assert.NotNil(t, g.One(f, ns.stat.Get("size"), nil))
@@ -1217,21 +1218,21 @@ func TestGraphPatch(t *testing.T) {
 //	request, err := http.NewRequest("PUT", testServer.URL+"/_test/1", strings.NewReader("@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .\n\n<> a <http://example.org/one>;\n"+
 //		"    <http://example.org/b> <#c> .\n    <#c> a <http://example.org/e> ."))
 //	assert.NoError(t, err)
-//	request.Header.Add("Content-Type", "text/turtle")
+//	request.Header.Add("Content-Type", constant.TextTurtle)
 //	response, err := httpClient.Do(request)
 //	assert.NoError(t, err)
 //	assert.Equal(t, 201, response.StatusCode)
 //
 //	request, err = http.NewRequest("PUT", testServer.URL+"/_test/2", strings.NewReader("@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .\n\n<> a <http://example.org/two>."))
 //	assert.NoError(t, err)
-//	request.Header.Add("Content-Type", "text/turtle")
+//	request.Header.Add("Content-Type", constant.TextTurtle)
 //	response, err = httpClient.Do(request)
 //	assert.NoError(t, err)
 //	assert.Equal(t, 201, response.StatusCode)
 //
 //	request, err = http.NewRequest("GET", testServer.URL+"/_test/*", nil)
 //	assert.NoError(t, err)
-//	request.Header.Add("Content-Type", "text/turtle")
+//	request.Header.Add("Content-Type", constant.TextTurtle)
 //	response, err = httpClient.Do(request)
 //	assert.NoError(t, err)
 //	assert.Equal(t, 200, response.StatusCode)
@@ -1240,7 +1241,7 @@ func TestGraphPatch(t *testing.T) {
 //	response.Body.Close()
 //
 //	g := NewGraph(testServer.URL + "/_test/")
-//	g.Parse(strings.NewReader(string(body)), "text/turtle")
+//	g.Parse(strings.NewReader(string(body)), constant.TextTurtle)
 //	assert.NotEmpty(t, g)
 //	assert.Equal(t, g.One(NewResource(testServer.URL+"/_test/1"), ns.rdf.Get("type"), NewResource("http://example.org/one")).Object, NewResource("http://example.org/one"))
 //	assert.Equal(t, g.One(NewResource(testServer.URL+"/_test/2"), ns.rdf.Get("type"), NewResource("http://example.org/two")).Object, NewResource("http://example.org/two"))
@@ -1362,7 +1363,7 @@ func TestGraphPatch(t *testing.T) {
 //	e := 0
 //	for i := 0; i < b.N; i++ {
 //		request, _ := http.NewRequest("PUT", testServer.URL+"/_bench/test", strings.NewReader("<d> <e> <f> ."))
-//		request.Header.Add("Content-Type", "text/turtle")
+//		request.Header.Add("Content-Type", constant.TextTurtle)
 //		if response, _ := httpClient.Do(request); response.StatusCode != 201 {
 //			e++
 //		}
@@ -1377,7 +1378,7 @@ func TestGraphPatch(t *testing.T) {
 //	e := 0
 //	for i := 0; i < b.N; i++ {
 //		request, _ := http.NewRequest("PUT", testServer.URL+fmt.Sprintf("/_bench/test%d", i), strings.NewReader("<d> <e> <f> ."))
-//		request.Header.Add("Content-Type", "text/turtle")
+//		request.Header.Add("Content-Type", constant.TextTurtle)
 //		if response, _ := httpClient.Do(request); response.StatusCode != 201 {
 //			e++
 //		}
@@ -1422,7 +1423,7 @@ func TestGraphPatch(t *testing.T) {
 //	e := 0
 //	for i := 0; i < b.N; i++ {
 //		request, _ := http.NewRequest("GET", testServer.URL+"/_bench/test", nil)
-//		request.Header.Add("Content-Type", "text/turtle")
+//		request.Header.Add("Content-Type", constant.TextTurtle)
 //		if response, _ := httpClient.Do(request); response.StatusCode != 200 {
 //			e++
 //		}

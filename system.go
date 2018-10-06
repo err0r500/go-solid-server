@@ -324,7 +324,7 @@ func validateRecoveryToken(w http.ResponseWriter, req *httpRequest, s *Server) S
 				return SystemReturn{Status: 500, Body: err.Error()}
 			}
 			defer f.Close()
-			err = s.fileHandler.WriteFile(g, f, "text/turtle")
+			err = s.fileHandler.WriteFile(g, f, constant.TextTurtle)
 			if err != nil {
 				s.debug.Println("Could not save account acl file with new password. Error: " + err.Error())
 				return SystemReturn{Status: 500, Body: err.Error()}
@@ -413,7 +413,7 @@ func newAccount(w http.ResponseWriter, req *httpRequest, s *Server) SystemReturn
 	g := NewWebIDProfile(account)
 
 	// write WebID profile to disk
-	err = s.fileHandler.WriteFile(g, f, "text/turtle")
+	err = s.fileHandler.WriteFile(g, f, constant.TextTurtle)
 	if err != nil {
 		s.debug.Println("Saving profile error: " + err.Error())
 		return SystemReturn{Status: 500, Body: err.Error()}
@@ -443,7 +443,7 @@ func newAccount(w http.ResponseWriter, req *httpRequest, s *Server) SystemReturn
 	defer f.Close()
 
 	// write profile acl to disk
-	err = s.fileHandler.WriteFile(g, f, "text/turtle")
+	err = s.fileHandler.WriteFile(g, f, constant.TextTurtle)
 	if err != nil {
 		s.debug.Println("Saving profile acl error: " + err.Error())
 		return SystemReturn{Status: 500, Body: err.Error()}
@@ -491,7 +491,7 @@ func newAccount(w http.ResponseWriter, req *httpRequest, s *Server) SystemReturn
 	defer f.Close()
 
 	// write account acl to disk
-	err = s.fileHandler.WriteFile(g, f, "text/turtle")
+	err = s.fileHandler.WriteFile(g, f, constant.TextTurtle)
 	if err != nil {
 		s.debug.Println("Saving account acl error: " + err.Error())
 		return SystemReturn{Status: 500, Body: err.Error()}

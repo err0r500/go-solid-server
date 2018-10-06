@@ -637,7 +637,7 @@ func (s *Server) Patch(w http.ResponseWriter, req *httpRequest, resource *domain
 		}
 		defer f.Close()
 
-		err = s.fileHandler.WriteFile(g, f, "text/turtle")
+		err = s.fileHandler.WriteFile(g, f, constant.TextTurtle)
 		if err != nil {
 			s.debug.Println("PATCH g.WriteFile err: " + err.Error())
 			return r.respond(500, err)
@@ -842,7 +842,7 @@ func (s Server) Post(w http.ResponseWriter, req *httpRequest, resource *domain.P
 			}
 			defer f.Close()
 			if g.Len() > 0 {
-				err = s.fileHandler.WriteFile(g, f, "text/turtle")
+				err = s.fileHandler.WriteFile(g, f, constant.TextTurtle)
 				if err != nil {
 					s.debug.Println("POST g.WriteFile err: " + err.Error())
 				} else {
@@ -1110,7 +1110,7 @@ func (s *Server) handle(w http.ResponseWriter, req *httpRequest) (r *response) {
 	}
 
 	// Content Negotiation
-	contentType := "text/turtle"
+	contentType := constant.TextTurtle
 	acceptList, _ := req.Accept()
 	if len(acceptList) > 0 && acceptList[0].SubType != "*" {
 		contentType, err = acceptList.Negotiate(mime.SerializerMimes...)

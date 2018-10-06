@@ -85,7 +85,7 @@ package gold
 //
 //	request, err = http.NewRequest("PUT", testServer.URL+aclDir+"abc", strings.NewReader("<a> <b> <c> ."))
 //	assert.NoError(t, err)
-//	request.Header.Add("Content-Type", "text/turtle")
+//	request.Header.Add("Content-Type", constant.TextTurtle)
 //	response, err = user1h.Do(request)
 //	assert.NoError(t, err)
 //	response.Body.Close()
@@ -111,7 +111,7 @@ package gold
 //		"	<http://www.w3.org/ns/auth/acl#mode> <http://www.w3.org/ns/auth/acl#Read>, <http://www.w3.org/ns/auth/acl#Write>."
 //	request, err = http.NewRequest("PUT", acl, strings.NewReader(body))
 //	assert.NoError(t, err)
-//	request.Header.Add("Content-Type", "text/turtle")
+//	request.Header.Add("Content-Type", constant.TextTurtle)
 //	response, err = user1h.Do(request)
 //	assert.NoError(t, err)
 //	response.Body.Close()

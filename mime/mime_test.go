@@ -18,7 +18,7 @@ package mime
 //		"application/rss":     "rss-tag-soup",
 //		"application/x-trig":  "trig",
 //		constant.TextN3:             "turtle",
-//		"text/turtle":         "turtle",
+//		constant.TextTurtle:         "turtle",
 //		"text/x-nquads":       "nquads",
 //		// "application/n-triples": "ntriples",
 //	}
@@ -31,7 +31,7 @@ package mime
 //		"application/rdf+xml":   "rdfxml-abbrev",
 //		"application/rss+xml":   "rss-1.0",
 //		"application/xhtml+xml": "html",
-//		"text/turtle":           "turtle",
+//		constant.TextTurtle:           "turtle",
 //		"text/x-graphviz":       "dot",
 //		"text/x-nquads":         "nquads",
 //		// "application/n-triples": "ntriples",
@@ -95,35 +95,35 @@ package mime
 //
 //	// /space/foo.ttl	nil		/space/foo.ttl
 //	path = "/space/foo.ttl"
-//	ctype = "text/turtle"
+//	ctype = constant.TextTurtle
 //	res, err = MapPathToExtension(path, ctype)
 //	assert.NoError(t, err)
 //	assert.Equal(t, path, res)
 //
 //	// /space/foo.html	text/turtle	/space/foo.html$.ttl
 //	path = "/space/foo.html"
-//	ctype = "text/turtle"
+//	ctype = constant.TextTurtle
 //	res, err = MapPathToExtension(path, ctype)
 //	assert.NoError(t, err)
 //	assert.Equal(t, path+"$.ttl", res)
 //
 //	// /space/foo	text/turtle	/space/foo.ttl
 //	path = "/space/foo"
-//	ctype = "text/turtle"
+//	ctype = constant.TextTurtle
 //	res, err = MapPathToExtension(path, ctype)
 //	assert.NoError(t, err)
 //	assert.Equal(t, path+".ttl", res)
 //
 //	// /space/foo.acl	text/turtle	/space/foo.acl
 //	path = "/space/foo" + config.ACLSuffix
-//	ctype = "text/turtle"
+//	ctype = constant.TextTurtle
 //	res, err = MapPathToExtension(path, ctype)
 //	assert.NoError(t, err)
 //	assert.Equal(t, path, res)
 //
 //	// /space/foo.meta	text/turtle	/space/foo.acl
 //	path = "/space/foo" + config.MetaSuffix
-//	ctype = "text/turtle"
+//	ctype = constant.TextTurtle
 //	res, err = MapPathToExtension(path, ctype)
 //	assert.NoError(t, err)
 //	assert.Equal(t, path, res)
@@ -168,7 +168,7 @@ package mime
 //	cases := []struct {
 //		in, want string
 //	}{
-//		{".ttl", "text/turtle"},
+//		{".ttl", constant.TextTurtle},
 //		{".n3", constant.TextN3},
 //		{".rdf", "application/rdf+xml"},
 //		{".jsonld", "application/ld+json"},

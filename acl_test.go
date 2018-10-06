@@ -54,7 +54,7 @@ package gold_test
 //			},
 //		},
 //	}
-//	user1n3, err := user1g.serialize("text/turtle")
+//	user1n3, err := user1g.serialize(constant.TextTurtle)
 //	assert.NoError(t, err)
 //	req1, err := http.NewRequest("PUT", user1, strings.NewReader(user1n3))
 //	assert.NoError(t, err)
@@ -84,7 +84,7 @@ package gold_test
 //			},
 //		},
 //	}
-//	user2n3, err := user2g.serialize("text/turtle")
+//	user2n3, err := user2g.serialize(constant.TextTurtle)
 //	assert.NoError(t, err)
 //	req2, err := http.NewRequest("PUT", user2, strings.NewReader(user2n3))
 //	assert.NoError(t, err)
@@ -121,7 +121,7 @@ package gold_test
 //
 //	request, err = http.NewRequest("PUT", acl, strings.NewReader(""))
 //	assert.NoError(t, err)
-//	request.Header.Add("Content-Type", "text/turtle")
+//	request.Header.Add("Content-Type", constant.TextTurtle)
 //	response, err = user1h.Do(request)
 //	assert.NoError(t, err)
 //	response.Body.Close()
@@ -129,7 +129,7 @@ package gold_test
 //
 //	request, err = http.NewRequest("PUT", testServer.URL+aclDir+"abc", strings.NewReader("<a> <b> <c> ."))
 //	assert.NoError(t, err)
-//	request.Header.Add("Content-Type", "text/turtle")
+//	request.Header.Add("Content-Type", constant.TextTurtle)
 //	response, err = user1h.Do(request)
 //	assert.NoError(t, err)
 //	response.Body.Close()
@@ -140,7 +140,7 @@ package gold_test
 //
 //	request, err = http.NewRequest("PUT", acl, strings.NewReader(""))
 //	assert.NoError(t, err)
-//	request.Header.Add("Content-Type", "text/turtle")
+//	request.Header.Add("Content-Type", constant.TextTurtle)
 //	response, err = user1h.Do(request)
 //	assert.NoError(t, err)
 //	response.Body.Close()
@@ -178,7 +178,7 @@ package gold_test
 //		"	<http://www.w3.org/ns/auth/acl#mode> <http://www.w3.org/ns/auth/acl#Read> ."
 //	request, err = http.NewRequest("PUT", acl, strings.NewReader(body))
 //	assert.NoError(t, err)
-//	request.Header.Add("Content-Type", "text/turtle")
+//	request.Header.Add("Content-Type", constant.TextTurtle)
 //	response, err = user1h.Do(request)
 //	assert.NoError(t, err)
 //	response.Body.Close()
@@ -240,7 +240,7 @@ package gold_test
 //		"	<http://www.w3.org/ns/auth/acl#mode> <http://www.w3.org/ns/auth/acl#Read> ."
 //	request, err = http.NewRequest("PUT", acl, strings.NewReader(body))
 //	assert.NoError(t, err)
-//	request.Header.Add("Content-Type", "text/turtle")
+//	request.Header.Add("Content-Type", constant.TextTurtle)
 //	response, err = user1h.Do(request)
 //	assert.NoError(t, err)
 //	response.Body.Close()
@@ -318,7 +318,7 @@ package gold_test
 //		"	<http://www.w3.org/ns/auth/acl#mode> <http://www.w3.org/ns/auth/acl#Control> ."
 //	request, err = http.NewRequest("PUT", acl, strings.NewReader(body))
 //	assert.NoError(t, err)
-//	request.Header.Add("Content-Type", "text/turtle")
+//	request.Header.Add("Content-Type", constant.TextTurtle)
 //	response, err = user1h.Do(request)
 //	assert.NoError(t, err)
 //	response.Body.Close()
@@ -348,7 +348,7 @@ package gold_test
 //
 //	request, err = http.NewRequest("PUT", acl, strings.NewReader(body))
 //	assert.NoError(t, err)
-//	request.Header.Add("Content-Type", "text/turtle")
+//	request.Header.Add("Content-Type", constant.TextTurtle)
 //	response, err = user1h.Do(request)
 //	assert.NoError(t, err)
 //	response.Body.Close()
@@ -371,7 +371,7 @@ package gold_test
 //
 //	request, err = http.NewRequest("PUT", acl, strings.NewReader("<d> <e> <f> ."))
 //	assert.NoError(t, err)
-//	request.Header.Add("Content-Type", "text/turtle")
+//	request.Header.Add("Content-Type", constant.TextTurtle)
 //	response, err = user2h.Do(request)
 //	assert.NoError(t, err)
 //	response.Body.Close()
@@ -380,7 +380,7 @@ package gold_test
 //	// agent
 //	request, err = http.NewRequest("PUT", acl, strings.NewReader("<d> <e> <f> ."))
 //	assert.NoError(t, err)
-//	request.Header.Add("Content-Type", "text/turtle")
+//	request.Header.Add("Content-Type", constant.TextTurtle)
 //	response, err = httpClient.Do(request)
 //	assert.NoError(t, err)
 //	response.Body.Close()
@@ -409,7 +409,7 @@ package gold_test
 //		"	<http://www.w3.org/ns/auth/acl#mode> <http://www.w3.org/ns/auth/acl#Read> ."
 //	request, err = http.NewRequest("PUT", acl, strings.NewReader(body))
 //	assert.NoError(t, err)
-//	request.Header.Add("Content-Type", "text/turtle")
+//	request.Header.Add("Content-Type", constant.TextTurtle)
 //	response, err = user1h.Do(request)
 //	assert.NoError(t, err)
 //	response.Body.Close()
@@ -432,7 +432,7 @@ package gold_test
 //
 //	request, err = http.NewRequest("PUT", acl, strings.NewReader(body))
 //	assert.NoError(t, err)
-//	request.Header.Add("Content-Type", "text/turtle")
+//	request.Header.Add("Content-Type", constant.TextTurtle)
 //	response, err = user1h.Do(request)
 //	assert.NoError(t, err)
 //	response.Body.Close()
@@ -455,7 +455,7 @@ package gold_test
 //
 //	request, err = http.NewRequest("PUT", acl, strings.NewReader("<d> <e> <f> ."))
 //	assert.NoError(t, err)
-//	request.Header.Add("Content-Type", "text/turtle")
+//	request.Header.Add("Content-Type", constant.TextTurtle)
 //	response, err = user2h.Do(request)
 //	assert.NoError(t, err)
 //	response.Body.Close()
@@ -471,7 +471,7 @@ package gold_test
 //
 //	request, err = http.NewRequest("PUT", acl, strings.NewReader("<d> <e> <f> ."))
 //	assert.NoError(t, err)
-//	request.Header.Add("Content-Type", "text/turtle")
+//	request.Header.Add("Content-Type", constant.TextTurtle)
 //	response, err = httpClient.Do(request)
 //	assert.NoError(t, err)
 //	response.Body.Close()
@@ -481,26 +481,26 @@ package gold_test
 //func TestACLGlob(t *testing.T) {
 //	request, err := http.NewRequest("GET", testServer.URL+aclDir+"*", nil)
 //	assert.NoError(t, err)
-//	request.Header.Add("Content-Type", "text/turtle")
+//	request.Header.Add("Content-Type", constant.TextTurtle)
 //	response, err := user2h.Do(request)
 //	assert.NoError(t, err)
 //	response.Body.Close()
 //	assert.Equal(t, 200, response.StatusCode)
 //	acl := ParseLinkHeader(response.Header.Get("Link")).MatchRel("acl")
 //	g := NewGraph(testServer.URL + aclDir)
-//	g.Parse(response.Body, "text/turtle")
+//	g.Parse(response.Body, constant.TextTurtle)
 //	authz := g.One(nil, nil, ns.acl.Get(constant.Authorization))
 //	assert.Nil(t, authz)
 //
 //	request, err = http.NewRequest("GET", testServer.URL+aclDir+"*", nil)
 //	assert.NoError(t, err)
-//	request.Header.Add("Content-Type", "text/turtle")
+//	request.Header.Add("Content-Type", constant.TextTurtle)
 //	response, err = user1h.Do(request)
 //	assert.NoError(t, err)
 //	response.Body.Close()
 //	assert.Equal(t, 200, response.StatusCode)
 //	g = NewGraph(testServer.URL + aclDir)
-//	g.Parse(response.Body, "text/turtle")
+//	g.Parse(response.Body, constant.TextTurtle)
 //	authz = g.One(nil, nil, ns.acl.Get(constant.Authorization))
 //	assert.Nil(t, authz)
 //
@@ -532,7 +532,7 @@ package gold_test
 //		"	<http://www.w3.org/ns/auth/acl#mode> <http://www.w3.org/ns/auth/acl#Append> ."
 //	request, err = http.NewRequest("PUT", acl, strings.NewReader(body))
 //	assert.NoError(t, err)
-//	request.Header.Add("Content-Type", "text/turtle")
+//	request.Header.Add("Content-Type", constant.TextTurtle)
 //	response, err = user1h.Do(request)
 //	assert.NoError(t, err)
 //	response.Body.Close()
@@ -555,7 +555,7 @@ package gold_test
 //
 //	request, err = http.NewRequest("POST", testServer.URL+aclDir+"abc", strings.NewReader("<a> <b> <c> ."))
 //	assert.NoError(t, err)
-//	request.Header.Add("Content-Type", "text/turtle")
+//	request.Header.Add("Content-Type", constant.TextTurtle)
 //	response, err = user1h.Do(request)
 //	assert.NoError(t, err)
 //	response.Body.Close()
@@ -578,7 +578,7 @@ package gold_test
 //
 //	request, err = http.NewRequest("POST", testServer.URL+aclDir+"abc", strings.NewReader("<d> <e> <f> ."))
 //	assert.NoError(t, err)
-//	request.Header.Add("Content-Type", "text/turtle")
+//	request.Header.Add("Content-Type", constant.TextTurtle)
 //	response, err = user2h.Do(request)
 //	assert.NoError(t, err)
 //	response.Body.Close()
@@ -594,7 +594,7 @@ package gold_test
 //
 //	request, err = http.NewRequest("POST", testServer.URL+aclDir+"abc", strings.NewReader("<g> <h> <i> ."))
 //	assert.NoError(t, err)
-//	request.Header.Add("Content-Type", "text/turtle")
+//	request.Header.Add("Content-Type", constant.TextTurtle)
 //	response, err = httpClient.Do(request)
 //	assert.NoError(t, err)
 //	response.Body.Close()
@@ -628,7 +628,7 @@ package gold_test
 //		"	<http://www.w3.org/ns/auth/acl#mode> <http://www.w3.org/ns/auth/acl#Read>, <http://www.w3.org/ns/auth/acl#Write>."
 //	request, err = http.NewRequest("PUT", acl, strings.NewReader(body))
 //	assert.NoError(t, err)
-//	request.Header.Add("Content-Type", "text/turtle")
+//	request.Header.Add("Content-Type", constant.TextTurtle)
 //	response, err = user1h.Do(request)
 //	assert.NoError(t, err)
 //	response.Body.Close()
@@ -651,7 +651,7 @@ package gold_test
 //
 //	request, err = http.NewRequest("PUT", testServer.URL+aclDir+"abc", strings.NewReader("<a> <b> <c> ."))
 //	assert.NoError(t, err)
-//	request.Header.Add("Content-Type", "text/turtle")
+//	request.Header.Add("Content-Type", constant.TextTurtle)
 //	response, err = user1h.Do(request)
 //	assert.NoError(t, err)
 //	response.Body.Close()
@@ -674,7 +674,7 @@ package gold_test
 //
 //	request, err = http.NewRequest("POST", testServer.URL+aclDir+"abc", strings.NewReader("<d> <e> <f> ."))
 //	assert.NoError(t, err)
-//	request.Header.Add("Content-Type", "text/turtle")
+//	request.Header.Add("Content-Type", constant.TextTurtle)
 //	response, err = user2h.Do(request)
 //	assert.NoError(t, err)
 //	response.Body.Close()
@@ -690,7 +690,7 @@ package gold_test
 //
 //	request, err = http.NewRequest("POST", testServer.URL+aclDir+"abc", strings.NewReader("<d> <e> <f> ."))
 //	assert.NoError(t, err)
-//	request.Header.Add("Content-Type", "text/turtle")
+//	request.Header.Add("Content-Type", constant.TextTurtle)
 //	response, err = httpClient.Do(request)
 //	assert.NoError(t, err)
 //	response.Body.Close()
@@ -707,7 +707,7 @@ package gold_test
 //func TestACLPathWithSpaces(t *testing.T) {
 //	request, err := http.NewRequest("POST", testServer.URL+aclDir, nil)
 //	assert.NoError(t, err)
-//	request.Header.Add("Content-Type", "text/turtle")
+//	request.Header.Add("Content-Type", constant.TextTurtle)
 //	request.Header.Add("Link", "<http://www.w3.org/ns/ldp#BasicContainer>; rel=\"type\"")
 //	request.Header.Add("Slug", "one two")
 //	response, err := user1h.Do(request)
@@ -724,7 +724,7 @@ package gold_test
 //		"	<http://www.w3.org/ns/auth/acl#mode> <http://www.w3.org/ns/auth/acl#Read>, <http://www.w3.org/ns/auth/acl#Write> ."
 //	request, err = http.NewRequest("PUT", acl, strings.NewReader(body))
 //	assert.NoError(t, err)
-//	request.Header.Add("Content-Type", "text/turtle")
+//	request.Header.Add("Content-Type", constant.TextTurtle)
 //	response, err = user1h.Do(request)
 //	assert.NoError(t, err)
 //	response.Body.Close()
@@ -777,7 +777,7 @@ package gold_test
 //
 //	request, err = http.NewRequest("PUT", testServer.URL+aclDir+"group", strings.NewReader(groupTriples))
 //	assert.NoError(t, err)
-//	request.Header.Add("Content-Type", "text/turtle")
+//	request.Header.Add("Content-Type", constant.TextTurtle)
 //	response, err = user1h.Do(request)
 //	assert.NoError(t, err)
 //	response.Body.Close()
@@ -794,7 +794,7 @@ package gold_test
 //		"	<http://www.w3.org/ns/auth/acl#mode> <http://www.w3.org/ns/auth/acl#Read> ."
 //	request, err = http.NewRequest("PUT", acl, strings.NewReader(body))
 //	assert.NoError(t, err)
-//	request.Header.Add("Content-Type", "text/turtle")
+//	request.Header.Add("Content-Type", constant.TextTurtle)
 //	response, err = user1h.Do(request)
 //	assert.NoError(t, err)
 //	response.Body.Close()
@@ -803,7 +803,7 @@ package gold_test
 //	// user1
 //	request, err = http.NewRequest("HEAD", acl, nil)
 //	assert.NoError(t, err)
-//	request.Header.Add("Accept", "text/turtle")
+//	request.Header.Add("Accept", constant.TextTurtle)
 //	response, err = user1h.Do(request)
 //	assert.NoError(t, err)
 //	response.Body.Close()
@@ -811,7 +811,7 @@ package gold_test
 //
 //	request, err = http.NewRequest("PUT", testServer.URL+aclDir+"abc", strings.NewReader("<a> <b> <c> ."))
 //	assert.NoError(t, err)
-//	request.Header.Add("Content-Type", "text/turtle")
+//	request.Header.Add("Content-Type", constant.TextTurtle)
 //	response, err = user1h.Do(request)
 //	assert.NoError(t, err)
 //	response.Body.Close()
@@ -840,7 +840,7 @@ package gold_test
 //
 //	request, err = http.NewRequest("POST", testServer.URL+aclDir+"abc", strings.NewReader("<d> <e> <f> ."))
 //	assert.NoError(t, err)
-//	request.Header.Add("Content-Type", "text/turtle")
+//	request.Header.Add("Content-Type", constant.TextTurtle)
 //	response, err = user2h.Do(request)
 //	assert.NoError(t, err)
 //	response.Body.Close()
@@ -855,7 +855,7 @@ package gold_test
 //	assert.Equal(t, 401, response.StatusCode)
 //
 //	request, err = http.NewRequest("POST", testServer.URL+aclDir+"abc", strings.NewReader("<d> <e> <f> ."))
-//	request.Header.Add("Content-Type", "text/turtle")
+//	request.Header.Add("Content-Type", constant.TextTurtle)
 //	response, err = httpClient.Do(request)
 //	response.Body.Close()
 //	assert.NoError(t, err)
@@ -898,7 +898,7 @@ package gold_test
 //		"	<http://www.w3.org/ns/auth/acl#mode> <http://www.w3.org/ns/auth/acl#Read> ."
 //	request, err = http.NewRequest("PUT", acl, strings.NewReader(body))
 //	assert.NoError(t, err)
-//	request.Header.Add("Content-Type", "text/turtle")
+//	request.Header.Add("Content-Type", constant.TextTurtle)
 //	response, err = user1h.Do(request)
 //	assert.NoError(t, err)
 //	response.Body.Close()
@@ -914,7 +914,7 @@ package gold_test
 //
 //	request, err = http.NewRequest("PUT", testServer.URL+aclDir+"abcd", strings.NewReader("<a> <b> <c> ."))
 //	assert.NoError(t, err)
-//	request.Header.Add("Content-Type", "text/turtle")
+//	request.Header.Add("Content-Type", constant.TextTurtle)
 //	response, err = user1h.Do(request)
 //	assert.NoError(t, err)
 //	response.Body.Close()
@@ -944,7 +944,7 @@ package gold_test
 //
 //	request, err = http.NewRequest("POST", testServer.URL+aclDir+"abcd", strings.NewReader("<d> <e> <f> ."))
 //	assert.NoError(t, err)
-//	request.Header.Add("Content-Type", "text/turtle")
+//	request.Header.Add("Content-Type", constant.TextTurtle)
 //	response, err = user2h.Do(request)
 //	assert.NoError(t, err)
 //	response.Body.Close()
@@ -960,7 +960,7 @@ package gold_test
 //
 //	request, err = http.NewRequest("POST", testServer.URL+aclDir+"abcd", strings.NewReader("<d> <e> <f> ."))
 //	assert.NoError(t, err)
-//	request.Header.Add("Content-Type", "text/turtle")
+//	request.Header.Add("Content-Type", constant.TextTurtle)
 //	response, err = httpClient.Do(request)
 //	assert.NoError(t, err)
 //	response.Body.Close()
@@ -993,7 +993,7 @@ package gold_test
 //		"	<http://www.w3.org/ns/auth/acl#mode> <http://www.w3.org/ns/auth/acl#Read>, <http://www.w3.org/ns/auth/acl#Write> ."
 //	request, err = http.NewRequest("PUT", acl, strings.NewReader(body))
 //	assert.NoError(t, err)
-//	request.Header.Add("Content-Type", "text/turtle")
+//	request.Header.Add("Content-Type", constant.TextTurtle)
 //	response, err = user1h.Do(request)
 //	assert.NoError(t, err)
 //	response.Body.Close()
@@ -1008,7 +1008,7 @@ package gold_test
 //
 //	request, err = http.NewRequest("POST", testServer.URL+aclDir+"abcd", strings.NewReader("<d> <e> <f> ."))
 //	assert.NoError(t, err)
-//	request.Header.Add("Content-Type", "text/turtle")
+//	request.Header.Add("Content-Type", constant.TextTurtle)
 //	request.Header.Add("On-Behalf-Of", "<"+user1+">")
 //	response, err = user2h.Do(request)
 //	assert.NoError(t, err)

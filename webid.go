@@ -343,7 +343,7 @@ func (s *Server) AddCertKeys(uri string, mod string, exp string) error {
 	defer f.Close()
 
 	// write account acl to disk
-	err = s.fileHandler.WriteFile(g, f, "text/turtle")
+	err = s.fileHandler.WriteFile(g, f, constant.TextTurtle)
 	if err != nil {
 		return err
 	}
@@ -406,7 +406,7 @@ func (s *Server) LinkToWebID(account webidAccount) error {
 	defer f.Close()
 
 	// write account meta file to disk
-	err = s.fileHandler.WriteFile(g, f, "text/turtle")
+	err = s.fileHandler.WriteFile(g, f, constant.TextTurtle)
 	if err != nil {
 		return err
 	}
@@ -488,7 +488,7 @@ func (s *Server) AddWorkspaces(account webidAccount, containsEmail bool, g *doma
 		defer f.Close()
 
 		// write account acl to disk
-		err = s.fileHandler.WriteFile(a, f, "text/turtle")
+		err = s.fileHandler.WriteFile(a, f, constant.TextTurtle)
 		if err != nil {
 			return err
 		}
@@ -517,7 +517,7 @@ func (s *Server) AddWorkspaces(account webidAccount, containsEmail bool, g *doma
 	}
 
 	// write account acl to disk
-	err = s.fileHandler.WriteFile(pref, f, "text/turtle")
+	err = s.fileHandler.WriteFile(pref, f, constant.TextTurtle)
 	if err != nil {
 		return err
 	}
@@ -548,6 +548,6 @@ func (s *Server) createTypeIndex(indexType, url string) error {
 	defer f.Close()
 
 	// write account acl to disk
-	err = s.fileHandler.WriteFile(typeIndex, f, "text/turtle")
+	err = s.fileHandler.WriteFile(typeIndex, f, constant.TextTurtle)
 	return err
 }

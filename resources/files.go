@@ -4,6 +4,8 @@ import (
 	"log"
 	"os"
 
+	"github.com/err0r500/go-solid-server/constant"
+
 	"github.com/err0r500/go-solid-server/uc"
 
 	"github.com/err0r500/go-solid-server/domain"
@@ -62,7 +64,7 @@ func (h origFilesHandler) AppendFile(g *domain.Graph, filename string, baseURI s
 		return
 	}
 
-	h.rdfHandler.ParseBase(g, f, "text/turtle", baseURI)
+	h.rdfHandler.ParseBase(g, f, constant.TextTurtle, baseURI)
 }
 
 // ReadFile is used to read RDF data from a file into the graph
@@ -82,7 +84,7 @@ func (origFilesHandler) ReadFile(g *domain.Graph, parser uc.Encoder, filename st
 		log.Println(err)
 		return
 	}
-	parser.Parse(g, f, "text/turtle")
+	parser.Parse(g, f, constant.TextTurtle)
 }
 
 func (origFilesHandler) Exists(path string) bool {

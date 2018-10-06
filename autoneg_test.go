@@ -8,11 +8,6 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/err0r500/go-solid-server/httpCaller"
-
-	"github.com/err0r500/go-solid-server/encoder"
-
-	"github.com/err0r500/go-solid-server/domain"
 	"github.com/err0r500/go-solid-server/mime"
 	"github.com/stretchr/testify/assert"
 )
@@ -26,7 +21,7 @@ func mockAccept(accept string) (al AcceptList, err error) {
 	req := &http.Request{}
 	req.Header = make(http.Header)
 	req.Header["Accept"] = []string{accept}
-	myreq := &httpRequest{req, nil, "", "", "", false, domain.URIHandler{}, WAC{}, httpCaller.New(), encoder.RdfEncoder{}}
+	myreq := &httpRequest{req, "", "", "", false, WAC{}}
 	al, err = myreq.Accept()
 	return
 }

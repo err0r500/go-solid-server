@@ -109,7 +109,7 @@ func (s *Server) logIn(w http.ResponseWriter, req *httpRequest) SystemReturn {
 
 	if req.Method == "GET" {
 		// try to guess WebID from account
-		webid = req.getAccountWebID()
+		webid = s.getAccountWebID(req.BaseURI())
 		return SystemReturn{Status: 200, Body: s.templater.LoginTemplate(redirTo, origin, webid)}
 	}
 
@@ -448,14 +448,14 @@ func newAccount(w http.ResponseWriter, req *httpRequest, s *Server) SystemReturn
 	}
 
 	// Link from root meta file to the WebID
-	err = req.LinkToWebID(account)
+	err = s.LinkToWebID(account)
 	if err != nil {
 		s.debug.Println("Error setting up workspaces: " + err.Error())
 		return SystemReturn{Status: 500, Body: err.Error()}
 	}
 
 	// Create workspaces and preferencesFile
-	err = req.AddWorkspaces(account, g)
+	err = s.AddWorkspaces(account, len(req.FormValue("email")) > 0, g)
 	if err != nil {
 		s.debug.Println("Error setting up workspaces: " + err.Error())
 		return SystemReturn{Status: 500, Body: err.Error()}
@@ -536,7 +536,7 @@ func newAccount(w http.ResponseWriter, req *httpRequest, s *Server) SystemReturn
 		rsaPub := pubKey.(*rsa.PublicKey)
 		mod := fmt.Sprintf("%x", rsaPub.N)
 		exp := fmt.Sprintf("%d", rsaPub.E)
-		err = req.AddCertKeys(webidURI, mod, exp)
+		err = s.AddCertKeys(webidURI, mod, exp)
 		if err != nil {
 			s.debug.Println("Couldn't add cert keys to profile: " + err.Error())
 		}
@@ -589,7 +589,7 @@ func newCert(w http.ResponseWriter, req *httpRequest, s *Server) SystemReturn {
 			rsaPub := pubKey.(*rsa.PublicKey)
 			mod := fmt.Sprintf("%x", rsaPub.N)
 			exp := fmt.Sprintf("%d", rsaPub.E)
-			err = req.AddCertKeys(webidURI, mod, exp)
+			err = s.AddCertKeys(webidURI, mod, exp)
 			if err != nil {
 				s.debug.Println("Couldn't add cert keys to profile: " + err.Error())
 				return SystemReturn{Status: 500, Body: err.Error()}

@@ -11,9 +11,6 @@ import (
 
 // WAC WebAccessControl object
 type WAC struct {
-	//req *httpRequest
-	//srv            *Server
-	//w              http.ResponseWriter
 	user           string
 	key            string
 	fileHandler    uc.FilesHandler
@@ -25,12 +22,11 @@ type WAC struct {
 
 // NewWAC creates a new WAC object
 func NewWAC(user string, key string) *WAC {
-	return &WAC{user: user, key: key}
+	return &WAC{user: user, key: key} // fixme : instantiate the interfaces
 }
 
 // Return an HTTP code and error (200 if authd, 401 if auth required, 403 if not authorized, 500 if error)
 func (acl *WAC) allow(origin string, mode string, path string) (int, error) {
-	//origin := acl.req.Header.Get("Origin")
 	accessType := "accessTo"
 	p, err := acl.pathInformer.GetPathInfo(path)
 	if err != nil {

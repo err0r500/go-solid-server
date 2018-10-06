@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/sha1"
+	"crypto/tls"
 	"crypto/x509"
 	"encoding/asn1"
 	"encoding/base64"
@@ -75,7 +76,7 @@ func pkeyTypeNE(pkey interface{}) (t, n, e string) {
 }
 
 // WebIDDigestAuth performs a digest authentication using WebID-RSA
-func WebIDDigestAuth(req *httpRequest) (string, error) {
+func (s *Server) WebIDDigestAuth(req *httpRequest) (string, error) {
 	if len(req.Header.Get("Authorization")) == 0 {
 		return "", nil
 	}
@@ -105,7 +106,7 @@ func WebIDDigestAuth(req *httpRequest) (string, error) {
 	}
 
 	// Decrypt and validate nonce from secure token
-	tValues, err := req.Server.ValidateSecureToken("WWW-Authenticate", authH.Nonce)
+	tValues, err := s.ValidateSecureToken("WWW-Authenticate", authH.Nonce)
 	if err != nil {
 		return "", err
 	}
@@ -119,23 +120,23 @@ func WebIDDigestAuth(req *httpRequest) (string, error) {
 	if len(tValues["secret"]) == 0 {
 		return "", errors.New("Missing secret from token (tempered with?)")
 	}
-	if tValues["secret"] != string(req.Server.cookieSalt) {
+	if tValues["secret"] != string(s.cookieSalt) {
 		return "", errors.New("Wrong secret value in client token!")
 	}
 
 	g := domain.NewGraph(authH.Username)
-	err = req.httpCaller.LoadURI(g, authH.Username)
+	err = s.httpCaller.LoadURI(g, authH.Username)
 	if err != nil {
 		return "", err
 	}
 
-	req.debug.Println("Checking for public keys for user", authH.Username)
+	//req.debug.Println("Checking for public keys for user", authH.Username)
 	for _, keyT := range g.All(domain.NewResource(authH.Username), domain.NewNS("cert").Get("key"), nil) {
 		for range g.All(keyT.Object, domain.NewNS("rdf").Get("type"), domain.NewNS("cert").Get("RSAPublicKey")) {
-			req.debug.Println("Found RSA key in user's profile", keyT.Object.String())
+			//req.debug.Println("Found RSA key in user's profile", keyT.Object.String())
 			for _, pubP := range g.All(keyT.Object, domain.NewNS("cert").Get("pem"), nil) {
-				keyP := req.rdfHandler.FromDomain(pubP.Object).String()
-				req.debug.Println("Found matching public key in user's profile", keyP[:10], "...", keyP[len(keyP)-10:len(keyP)])
+				keyP := s.rdfHandler.FromDomain(pubP.Object).String()
+				//req.debug.Println("Found matching public key in user's profile", keyP[:10], "...", keyP[len(keyP)-10:len(keyP)])
 				parser, err := ParseRSAPublicPEMKey([]byte(keyP))
 				if err == nil {
 					err = parser.Verify(claim[:], signature)
@@ -143,14 +144,14 @@ func WebIDDigestAuth(req *httpRequest) (string, error) {
 						return authH.Username, nil
 					}
 				}
-				req.debug.Println("Unable to verify signature with key", keyP[:10], "...", keyP[len(keyP)-10:len(keyP)], "-- reason:", err)
+				//req.debug.Println("Unable to verify signature with key", keyP[:10], "...", keyP[len(keyP)-10:len(keyP)], "-- reason:", err)
 			}
 			// also loop through modulus/exp
 			for _, pubN := range g.All(keyT.Object, domain.NewNS("cert").Get("modulus"), nil) {
-				keyN := req.rdfHandler.FromDomain(pubN.Object).String()
+				keyN := s.rdfHandler.FromDomain(pubN.Object).String()
 				for _, pubE := range g.All(keyT.Object, domain.NewNS("cert").Get("exponent"), nil) {
-					keyE := req.rdfHandler.FromDomain(pubE.Object).String()
-					req.debug.Println("Found matching modulus and exponent in user's profile", keyN[:10], "...", keyN[len(keyN)-10:len(keyN)])
+					keyE := s.rdfHandler.FromDomain(pubE.Object).String()
+					//req.debug.Println("Found matching modulus and exponent in user's profile", keyN[:10], "...", keyN[len(keyN)-10:len(keyN)])
 					parser, err := ParseRSAPublicKeyNE("RSAPublicKey", keyN, keyE)
 					if err == nil {
 						err = parser.Verify(claim[:], signature)
@@ -158,7 +159,7 @@ func WebIDDigestAuth(req *httpRequest) (string, error) {
 							return authH.Username, nil
 						}
 					}
-					req.debug.Println("Unable to verify signature with key", keyN[:10], "...", keyN[len(keyN)-10:len(keyN)], "-- reason:", err)
+					//req.debug.Println("Unable to verify signature with key", keyN[:10], "...", keyN[len(keyN)-10:len(keyN)], "-- reason:", err)
 				}
 			}
 		}
@@ -168,8 +169,7 @@ func WebIDDigestAuth(req *httpRequest) (string, error) {
 }
 
 // WebIDTLSAuth - performs WebID-TLS authentication
-func WebIDTLSAuth(req *httpRequest) (uri string, err error) {
-	tls := req.TLS
+func (s *Server) WebIDTLSAuth(tls *tls.ConnectionState) (uri string, err error) {
 	claim := ""
 	uri = ""
 	err = nil
@@ -236,7 +236,7 @@ func WebIDTLSAuth(req *httpRequest) (uri string, err error) {
 		// pkey from client contains WebID claim
 
 		g := domain.NewGraph(claim)
-		err = req.httpCaller.LoadURI(g, claim)
+		err = s.httpCaller.LoadURI(g, claim)
 		if err != nil {
 			return "", err
 		}
@@ -260,7 +260,7 @@ func WebIDTLSAuth(req *httpRequest) (uri string, err error) {
 				}
 			matchExponent:
 				// found a matching exponent in the profile
-				req.debug.Println("Found matching public modulus and exponent in user's profile")
+				//req.debug.Println("Found matching public modulus and exponent in user's profile")
 				uri = claim
 				webidL.Lock()
 				pkeyURI[pkeyk] = uri
@@ -316,7 +316,7 @@ func AddProfileKeys(uri string, g *domain.Graph) (*domain.Graph, *rsa.PrivateKey
 }
 
 // AddCertKeys adds the modulus and exponent values to the profile document
-func (req *httpRequest) AddCertKeys(uri string, mod string, exp string) error {
+func (s *Server) AddCertKeys(uri string, mod string, exp string) error {
 	uuid := NewUUID()
 	uuid = uuid[:4]
 
@@ -324,10 +324,10 @@ func (req *httpRequest) AddCertKeys(uri string, mod string, exp string) error {
 	userTerm := domain.NewResource(uri)
 	keyTerm := domain.NewResource(profileURI + "#key" + uuid)
 
-	resource, _ := req.Server.pathInformer.GetPathInfo(profileURI)
+	resource, _ := s.pathInformer.GetPathInfo(profileURI)
 
 	g := domain.NewGraph(profileURI)
-	req.fileHandler.ReadFile(g, req.parser, resource.File)
+	s.fileHandler.ReadFile(g, s.parser, resource.File)
 	g.AddTriple(userTerm, domain.NewNS("cert").Get("key"), keyTerm)
 	g.AddTriple(keyTerm, domain.NewNS("rdf").Get("type"), domain.NewNS("cert").Get("RSAPublicKey"))
 	g.AddTriple(keyTerm, domain.NewNS("rdfs").Get("label"), domain.NewLiteral("Created "+time.Now().Format(time.RFC822)+" on "+resource.Obj.Host))
@@ -342,7 +342,7 @@ func (req *httpRequest) AddCertKeys(uri string, mod string, exp string) error {
 	defer f.Close()
 
 	// write account acl to disk
-	err = req.fileHandler.WriteFile(g, f, "text/turtle")
+	err = s.fileHandler.WriteFile(g, f, "text/turtle")
 	if err != nil {
 		return err
 	}
@@ -391,8 +391,8 @@ func NewWebIDProfile(account webidAccount) *domain.Graph {
 }
 
 // LinkToWebID links the account URI (root container) to the WebID that owns the space
-func (req *httpRequest) LinkToWebID(account webidAccount) error {
-	resource, _ := req.Server.pathInformer.GetPathInfo(account.BaseURI + "/")
+func (s *Server) LinkToWebID(account webidAccount) error {
+	resource, _ := s.pathInformer.GetPathInfo(account.BaseURI + "/")
 
 	g := domain.NewGraph(resource.URI)
 	g.AddTriple(domain.NewResource(account.WebID), domain.NewNS("st").Get("account"), domain.NewResource(resource.URI))
@@ -405,7 +405,7 @@ func (req *httpRequest) LinkToWebID(account webidAccount) error {
 	defer f.Close()
 
 	// write account meta file to disk
-	err = req.fileHandler.WriteFile(g, f, "text/turtle")
+	err = s.fileHandler.WriteFile(g, f, "text/turtle")
 	if err != nil {
 		return err
 	}
@@ -413,16 +413,16 @@ func (req *httpRequest) LinkToWebID(account webidAccount) error {
 	return nil
 }
 
-func (req *httpRequest) getAccountWebID() string {
-	resource, err := req.Server.pathInformer.GetPathInfo(req.BaseURI())
+func (s *Server) getAccountWebID(baseURI string) string {
+	resource, err := s.pathInformer.GetPathInfo(baseURI)
 	if err == nil {
-		resource, _ = req.Server.pathInformer.GetPathInfo(resource.Base)
+		resource, _ = s.pathInformer.GetPathInfo(resource.Base)
 		g := domain.NewGraph(resource.MetaURI)
-		req.fileHandler.ReadFile(g, req.parser, resource.MetaFile)
+		s.fileHandler.ReadFile(g, s.parser, resource.MetaFile)
 		if g.Len() >= 1 {
 			webid := g.One(nil, domain.NewNS("st").Get("account"), domain.NewResource(resource.MetaURI))
 			if webid != nil {
-				return req.uriManipulator.Debrack(webid.Subject.String())
+				return s.uriManipulator.Debrack(webid.Subject.String())
 			}
 		}
 	}
@@ -431,7 +431,7 @@ func (req *httpRequest) getAccountWebID() string {
 }
 
 // AddWorkspaces creates all the necessary workspaces corresponding to a new account
-func (req *httpRequest) AddWorkspaces(account webidAccount, g *domain.Graph) error {
+func (s *Server) AddWorkspaces(account webidAccount, containsEmail bool, g *domain.Graph) error {
 	pref := domain.NewGraph(account.PrefURI)
 	prefTerm := domain.NewResource(account.PrefURI)
 	pref.AddTriple(prefTerm, domain.NewNS("rdf").Get("type"), domain.NewNS("space").Get("ConfigurationFile"))
@@ -441,7 +441,7 @@ func (req *httpRequest) AddWorkspaces(account webidAccount, g *domain.Graph) err
 	pref.AddTriple(domain.NewResource(account.WebID), domain.NewNS("rdf").Get("type"), domain.NewNS("foaf").Get("Person"))
 
 	for _, ws := range workspaces {
-		resource, _ := req.Server.pathInformer.GetPathInfo(account.BaseURI + "/" + ws.Name + "/")
+		resource, _ := s.pathInformer.GetPathInfo(account.BaseURI + "/" + ws.Name + "/")
 		err := os.MkdirAll(resource.File, 0755)
 		if err != nil {
 			return err
@@ -456,7 +456,7 @@ func (req *httpRequest) AddWorkspaces(account webidAccount, g *domain.Graph) err
 		a.AddTriple(aclTerm, domain.NewNS("acl").Get("accessTo"), wsTerm)
 		a.AddTriple(aclTerm, domain.NewNS("acl").Get("accessTo"), domain.NewResource(resource.AclURI))
 		a.AddTriple(aclTerm, domain.NewNS("acl").Get("agent"), domain.NewResource(account.WebID))
-		if len(req.FormValue("email")) > 0 {
+		if containsEmail {
 			a.AddTriple(aclTerm, domain.NewNS("acl").Get("agent"), domain.NewResource("mailto:"+account.Email))
 		}
 		a.AddTriple(aclTerm, domain.NewNS("acl").Get("defaultForNew"), wsTerm)
@@ -487,7 +487,7 @@ func (req *httpRequest) AddWorkspaces(account webidAccount, g *domain.Graph) err
 		defer f.Close()
 
 		// write account acl to disk
-		err = req.fileHandler.WriteFile(a, f, "text/turtle")
+		err = s.fileHandler.WriteFile(a, f, "text/turtle")
 		if err != nil {
 			return err
 		}
@@ -504,7 +504,7 @@ func (req *httpRequest) AddWorkspaces(account webidAccount, g *domain.Graph) err
 		//}
 	}
 
-	resource, _ := req.Server.pathInformer.GetPathInfo(account.PrefURI)
+	resource, _ := s.pathInformer.GetPathInfo(account.PrefURI)
 	err := os.MkdirAll(_path.Dir(resource.File), 0755)
 	if err != nil {
 		return err
@@ -516,25 +516,25 @@ func (req *httpRequest) AddWorkspaces(account webidAccount, g *domain.Graph) err
 	}
 
 	// write account acl to disk
-	err = req.fileHandler.WriteFile(pref, f, "text/turtle")
+	err = s.fileHandler.WriteFile(pref, f, "text/turtle")
 	if err != nil {
 		return err
 	}
 	f.Close()
 
 	// write the typeIndex
-	createTypeIndex(req, "ListedDocument", account.PubTypeIndex)
-	createTypeIndex(req, "UnlistedDocument", account.PrivTypeIndex)
+	s.createTypeIndex("ListedDocument", account.PubTypeIndex)
+	s.createTypeIndex("UnlistedDocument", account.PrivTypeIndex)
 
 	return nil
 }
 
-func createTypeIndex(req *httpRequest, indexType, url string) error {
+func (s *Server) createTypeIndex(indexType, url string) error {
 	typeIndex := domain.NewGraph(url)
 	typeIndex.AddTriple(domain.NewResource(url), domain.NewNS("rdf").Get("type"), domain.NewNS("st").Get("TypeIndex"))
 	typeIndex.AddTriple(domain.NewResource(url), domain.NewNS("rdf").Get("type"), domain.NewNS("st").Get(indexType))
 
-	resource, _ := req.Server.pathInformer.GetPathInfo(url)
+	resource, _ := s.pathInformer.GetPathInfo(url)
 	err := os.MkdirAll(_path.Dir(resource.File), 0755)
 	if err != nil {
 		return err
@@ -547,6 +547,6 @@ func createTypeIndex(req *httpRequest, indexType, url string) error {
 	defer f.Close()
 
 	// write account acl to disk
-	err = req.fileHandler.WriteFile(typeIndex, f, "text/turtle")
+	err = s.fileHandler.WriteFile(typeIndex, f, "text/turtle")
 	return err
 }

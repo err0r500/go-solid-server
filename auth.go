@@ -33,7 +33,7 @@ func (s *Server) authn(req *httpRequest, w http.ResponseWriter) string {
 
 	// try WebID-RSA
 	if len(req.Header.Get("Authorization")) > 0 {
-		user, err = WebIDDigestAuth(req)
+		user, err = s.WebIDDigestAuth(req)
 		if err != nil {
 			//req.Server.debug.Println("WebID-RSA auth error:", err)
 		}
@@ -44,7 +44,7 @@ func (s *Server) authn(req *httpRequest, w http.ResponseWriter) string {
 
 	// fall back to WebID-TLS
 	if len(user) == 0 {
-		user, err = WebIDTLSAuth(req)
+		user, err = s.WebIDTLSAuth(req.TLS)
 		if err != nil {
 			//req.Server.debug.Println("WebID-TLS error:", err)
 		}
@@ -55,13 +55,13 @@ func (s *Server) authn(req *httpRequest, w http.ResponseWriter) string {
 
 	if len(user) > 0 {
 		if len(req.Header.Get("On-Behalf-Of")) > 0 {
-			delegator := req.uriManipulator.Debrack(req.Header.Get("On-Behalf-Of"))
+			delegator := s.uriManipulator.Debrack(req.Header.Get("On-Behalf-Of"))
 			if req.wac.VerifyDelegator(delegator, user) {
 				//req.Server.debug.Println("Setting delegation user to:", delegator)
 				user = delegator
 			}
 		}
-		req.Server.userCookieSet(w, user)
+		s.userCookieSet(w, user)
 		return user
 	}
 
@@ -71,16 +71,18 @@ func (s *Server) authn(req *httpRequest, w http.ResponseWriter) string {
 }
 
 func (req *httpRequest) userCookie() (string, error) {
-	value := make(map[string]string)
-	cookie, err := req.Cookie("Session")
-	if err != nil {
-		return "", errors.New(err.Error() + " Got: " + fmt.Sprintf("%s", req.Cookies()))
-	}
-	err = req.Server.cookie.Decode("Session", cookie.Value, &value)
-	if err != nil {
-		return "", err
-	}
-	return value["user"], nil
+	// fixme : not sure it's a smart move to store cookie in shared struct
+	//value := make(map[string]string)
+	//cookie, err := req.Cookie("Session")
+	//if err != nil {
+	//	return "", errors.New(err.Error() + " Got: " + fmt.Sprintf("%s", req.Cookies()))
+	//}
+	//err = req.Server.cookie.Decode("Session", cookie.Value, &value)
+	//if err != nil {
+	//	return "", err
+	//}
+	//return value["user"], nil
+	return "", nil
 }
 
 func (srv *Server) userCookieSet(w http.ResponseWriter, user string) error {
@@ -252,9 +254,9 @@ func IsTokenDateValid(valid string) error {
 	return nil
 }
 
-func GetAuthzFromToken(token string, req *httpRequest) (string, error) {
+func (s *Server) GetAuthzFromToken(token string, req *httpRequest) (string, error) {
 	// values, err := GetValuesFromToken("Authorization", token, req, s)
-	values, err := req.Server.getPersistedToken("Authorization", req.Host, token)
+	values, err := s.getPersistedToken("Authorization", req.Host, token)
 	if err != nil {
 		return "", err
 	}

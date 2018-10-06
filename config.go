@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/err0r500/go-solid-server/logger"
+
 	"github.com/err0r500/go-solid-server/webdav"
 
 	"github.com/err0r500/go-solid-server/tokenStorer"
@@ -24,15 +26,15 @@ import (
 
 // NewServer is used to create a new Server instance
 func NewServer(config domain.ServerConfig) *Server {
-	debugger := log.New(ioutil.Discard, "", 0)
+	debugger := logger.New(log.New(ioutil.Discard, "", 0))
 	if config.Debug {
-		debugger = log.New(os.Stderr, "[debug] ", log.Flags()|log.Lshortfile)
+		debugger = logger.New(log.New(os.Stderr, "[debug] ", log.Flags()|log.Lshortfile))
 	}
 
 	s := &Server{
 		Config:        config,
 		cookieManager: cookies.New(),
-		debug:         debugger,
+		logger:        debugger,
 		fileHandler:   resources.New(encoder.New()),
 		httpCaller:    httpCaller.New(),
 		mailer:        mail.New(domain.EmailConfig{}),
@@ -41,17 +43,13 @@ func NewServer(config domain.ServerConfig) *Server {
 		rdfHandler:    encoder.RdfEncoder{},
 		tokenStorer:   tokenStorer.New(config.BoltPath),
 		webdavHandler: webdav.New(config.DataRoot),
-		//webdav: &webdav.Handler{
-		//	FileSystem: webdav.Dir(config.DataRoot),
-		//	LockSystem: webdav.NewMemLS(),
-		//},
 	}
 
 	mime.AddRDFExtension(s.Config.ACLSuffix)
 	mime.AddRDFExtension(s.Config.MetaSuffix)
 
-	s.debug.Println("---- starting server ----")
-	s.debug.Printf("config: %#v\n", s.Config)
+	s.logger.Debug("---- starting server ----")
+	s.logger.Debug("config: %#v\n", s.Config)
 	return s
 }
 

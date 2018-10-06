@@ -209,7 +209,7 @@ func (s *Server) NewSecureToken(tokenType string, values map[string]string, dura
 	values["valid"] = fmt.Sprintf("%d", valid)
 	token, err := s.cookieManager.Encode(tokenType, values)
 	if err != nil {
-		s.debug.Println("Error encoding new token: " + err.Error())
+		s.logger.Debug("Error encoding new token: " + err.Error())
 		return "", err
 	}
 	return token, nil
@@ -220,7 +220,7 @@ func (s *Server) ValidateSecureToken(tokenType string, token string) (map[string
 	values := make(map[string]string)
 	err := s.cookieManager.Decode(tokenType, token, &values)
 	if err != nil {
-		s.debug.Println("Secure token decoding error: " + err.Error())
+		s.logger.Debug("Secure token decoding error: " + err.Error())
 		return values, err
 	}
 
@@ -231,12 +231,12 @@ func (s *Server) GetValuesFromToken(tokenType string, token string, req *httpReq
 	values := NewTokenValues()
 	token, err := decodeQuery(token)
 	if err != nil {
-		s.debug.Println("Token URL decoding error for type: " + tokenType + " : " + err.Error())
+		s.logger.Debug("Token URL decoding error for type: " + tokenType + " : " + err.Error())
 		return values, err
 	}
 	err = s.cookieManager.Decode(tokenType, token, &values)
 	if err != nil {
-		s.debug.Println("Token decoding error for type: " + tokenType + " \nToken: " + token + "\n" + err.Error())
+		s.logger.Debug("Token decoding error for type: " + tokenType + " \nToken: " + token + "\n" + err.Error())
 		return values, err
 	}
 	return values, nil

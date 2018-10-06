@@ -81,7 +81,7 @@ func (s *Server) logIn(w http.ResponseWriter, req *httpRequest) SystemReturn {
 	redirTo := req.FormValue("redirect")
 	origin := req.FormValue("origin")
 
-	s.debug.Println("Got login request. Optional params: ", redirTo, origin)
+	s.logger.Debug("Got login request. Optional params: ", redirTo, origin)
 
 	// if cookie is set, just redirect
 	if len(req.User) > 0 {
@@ -92,7 +92,7 @@ func (s *Server) logIn(w http.ResponseWriter, req *httpRequest) SystemReturn {
 		// refresh cookie
 		err := s.userCookieSet(w, req.User)
 		if err != nil {
-			s.debug.Println("Error setting new cookie: " + err.Error())
+			s.logger.Debug("Error setting new cookie: " + err.Error())
 			return SystemReturn{Status: 500, Body: err.Error()}
 		}
 		// redirect
@@ -116,14 +116,14 @@ func (s *Server) logIn(w http.ResponseWriter, req *httpRequest) SystemReturn {
 	}
 	resource, err := s.pathInformer.GetPathInfo(req.BaseURI())
 	if err != nil {
-		s.debug.Println("PathInfo error: " + err.Error())
+		s.logger.Debug("PathInfo error: " + err.Error())
 		return SystemReturn{Status: 500, Body: err.Error()}
 	}
 	// try to fetch hashed password from root ,acl
 	resource, _ = s.pathInformer.GetPathInfo(resource.Base)
 	kb := domain.NewGraph(resource.AclURI)
 	s.fileHandler.ReadFile(kb, s.parser, resource.AclFile)
-	s.debug.Println("Looking for password in", resource.AclFile)
+	s.logger.Debug("Looking for password in", resource.AclFile)
 	// find the policy containing root acl
 	for _, m := range kb.All(nil, domain.NewNS("acl").Get("mode"), domain.NewNS("acl").Get("Control")) {
 		p := kb.One(m.Subject, domain.NewNS("acl").Get("password"), nil)
@@ -134,14 +134,14 @@ func (s *Server) logIn(w http.ResponseWriter, req *httpRequest) SystemReturn {
 	}
 	// exit if no pass
 	if len(passL) == 0 {
-		s.debug.Println("Access denied! Could not find a password for WebID: " + webid)
+		s.logger.Debug("Access denied! Could not find a password for WebID: " + webid)
 		return SystemReturn{Status: 403, Body: "Access denied! Could not find a password for WebID: " + webid}
 	}
 
 	// check if passwords match
 	passF = saltedPassword(s.Config.Salt, passF)
 	if passF != passL {
-		s.debug.Println("Access denied! Bad WebID or password.")
+		s.logger.Debug("Access denied! Bad WebID or password.")
 		return SystemReturn{Status: 403, Body: "Access denied! Bad WebID or password."}
 	}
 
@@ -149,7 +149,7 @@ func (s *Server) logIn(w http.ResponseWriter, req *httpRequest) SystemReturn {
 	// also set cookie now
 	err = s.userCookieSet(w, webid)
 	if err != nil {
-		s.debug.Println("Error setting new cookie: " + err.Error())
+		s.logger.Debug("Error setting new cookie: " + err.Error())
 		return SystemReturn{Status: 500, Body: err.Error()}
 	}
 
@@ -171,14 +171,14 @@ func loginRedirect(w http.ResponseWriter, req *httpRequest, s *Server, values ma
 	// try to get existing token
 	key, err := s.tokenStorer.GetTokenByOrigin(constant.HAuthorization, req.Host, values["origin"])
 	if err != nil || len(key) == 0 {
-		s.debug.Println("Could not find a token for origin:", values["origin"])
+		s.logger.Debug("Could not find a token for origin:", values["origin"])
 		key, err = s.tokenStorer.NewPersistedToken(constant.HAuthorization, req.Host, values)
 		if err != nil {
-			s.debug.Println("Could not generate authorization token for " + values["webid"] + ", err: " + err.Error())
+			s.logger.Debug("Could not generate authorization token for " + values["webid"] + ", err: " + err.Error())
 			return SystemReturn{Status: 500, Body: "Could not generate auth token for " + values["webid"] + ", err: " + err.Error()}
 		}
 	}
-	s.debug.Println("Generated new token for", values["webid"], "->", key)
+	s.logger.Debug("Generated new token for", values["webid"], "->", key)
 	redir, err := url.Parse(redirTo)
 	if err != nil {
 		return SystemReturn{Status: 400, Body: "Could not parse URL " + redirTo + ". Error: " + err.Error()}
@@ -187,7 +187,7 @@ func loginRedirect(w http.ResponseWriter, req *httpRequest, s *Server, values ma
 	q.Set("webid", values["webid"])
 	q.Set("key", key)
 	redir.RawQuery = q.Encode()
-	s.debug.Println("Redirecting user to", redir.String())
+	s.logger.Debug("Redirecting user to", redir.String())
 	http.Redirect(w, req.Request, redir.String(), 301)
 	return SystemReturn{Status: 200}
 }
@@ -210,7 +210,7 @@ func sendRecoveryToken(w http.ResponseWriter, req *httpRequest, s *Server) Syste
 	// log.Println("Host:" + req.Header.Get("Host"))
 	resource, err := s.pathInformer.GetPathInfo(req.BaseURI())
 	if err != nil {
-		s.debug.Println("PathInfo error: " + err.Error())
+		s.logger.Debug("PathInfo error: " + err.Error())
 		return SystemReturn{Status: 500, Body: err.Error()}
 	}
 	// try to fetch recovery email from root ,acl
@@ -230,7 +230,7 @@ func sendRecoveryToken(w http.ResponseWriter, req *httpRequest, s *Server) Syste
 	}
 	// exit if no email
 	if len(email) == 0 {
-		s.debug.Println("Access denied! Could not find a recovery email for WebID: " + webid)
+		s.logger.Debug("Access denied! Could not find a recovery email for WebID: " + webid)
 		return SystemReturn{Status: 403, Body: "Access denied! Could not find a recovery email for WebID: " + webid}
 	}
 	values := map[string]string{
@@ -240,7 +240,7 @@ func sendRecoveryToken(w http.ResponseWriter, req *httpRequest, s *Server) Syste
 	t := time.Duration(s.Config.TokenAge) * time.Minute
 	token, err := s.NewSecureToken("Recovery", values, t)
 	if err != nil {
-		s.debug.Println("Could not generate recovery token for " + webid + ", err: " + err.Error())
+		s.logger.Debug("Could not generate recovery token for " + webid + ", err: " + err.Error())
 		return SystemReturn{Status: 400, Body: "Could not generate recovery token for " + webid + ", err: " + err.Error()}
 	}
 	// create recovery URL
@@ -260,13 +260,13 @@ func sendRecoveryToken(w http.ResponseWriter, req *httpRequest, s *Server) Syste
 func validateRecoveryToken(w http.ResponseWriter, req *httpRequest, s *Server) SystemReturn {
 	token, err := decodeQuery(req.FormValue("token"))
 	if err != nil {
-		s.debug.Println("Decode query err: " + err.Error())
+		s.logger.Debug("Decode query err: " + err.Error())
 		return SystemReturn{Status: 500, Body: err.Error()}
 	}
 	value := make(map[string]string)
 	err = s.cookieManager.Decode("Recovery", token, &value)
 	if err != nil {
-		s.debug.Println("Decoding err: " + err.Error())
+		s.logger.Debug("Decoding err: " + err.Error())
 		return SystemReturn{Status: 500, Body: err.Error()}
 	}
 
@@ -281,7 +281,7 @@ func validateRecoveryToken(w http.ResponseWriter, req *httpRequest, s *Server) S
 	webid := value["webid"]
 	err = s.userCookieSet(w, webid)
 	if err != nil {
-		s.debug.Println("Error setting new cookie: " + err.Error())
+		s.logger.Debug("Error setting new cookie: " + err.Error())
 		return SystemReturn{Status: 500, Body: err.Error()}
 	}
 
@@ -316,13 +316,13 @@ func validateRecoveryToken(w http.ResponseWriter, req *httpRequest, s *Server) S
 			// open account acl file
 			f, err := os.OpenFile(resource.AclFile, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0644)
 			if err != nil {
-				s.debug.Println("Could not open file to save new password. Error: " + err.Error())
+				s.logger.Debug("Could not open file to save new password. Error: " + err.Error())
 				return SystemReturn{Status: 500, Body: err.Error()}
 			}
 			defer f.Close()
 			err = s.fileHandler.WriteFile(g, f, constant.TextTurtle)
 			if err != nil {
-				s.debug.Println("Could not save account acl file with new password. Error: " + err.Error())
+				s.logger.Debug("Could not save account acl file with new password. Error: " + err.Error())
 				return SystemReturn{Status: 500, Body: err.Error()}
 			}
 			// All set
@@ -378,13 +378,13 @@ func newAccount(w http.ResponseWriter, req *httpRequest, s *Server) SystemReturn
 		account.QueryURI = accountBase + ",query"
 	}
 
-	s.debug.Println("Checking if account profile <" + resource.File + "> exists...")
+	s.logger.Debug("Checking if account profile <" + resource.File + "> exists...")
 	stat, err := os.Stat(resource.File)
 	if err != nil {
-		s.debug.Println("Stat error: " + err.Error())
+		s.logger.Debug("Stat error: " + err.Error())
 	}
 	if stat != nil && stat.IsDir() {
-		s.debug.Println("Found " + resource.File)
+		s.logger.Debug("Found " + resource.File)
 		return SystemReturn{Status: 406, Body: "An account with the same name already exists."}
 	}
 
@@ -393,14 +393,14 @@ func newAccount(w http.ResponseWriter, req *httpRequest, s *Server) SystemReturn
 	// create account space
 	err = os.MkdirAll(_path.Dir(resource.File), 0755)
 	if err != nil {
-		s.debug.Println("MkdirAll error: " + err.Error())
+		s.logger.Debug("MkdirAll error: " + err.Error())
 		return SystemReturn{Status: 500, Body: err.Error()}
 	}
 
 	// open WebID profile file
 	f, err := os.OpenFile(resource.File, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0644)
 	if err != nil {
-		s.debug.Println("Open profile error: " + err.Error())
+		s.logger.Debug("Open profile error: " + err.Error())
 		return SystemReturn{Status: 500, Body: err.Error()}
 	}
 	defer f.Close()
@@ -411,7 +411,7 @@ func newAccount(w http.ResponseWriter, req *httpRequest, s *Server) SystemReturn
 	// write WebID profile to disk
 	err = s.fileHandler.WriteFile(g, f, constant.TextTurtle)
 	if err != nil {
-		s.debug.Println("Saving profile error: " + err.Error())
+		s.logger.Debug("Saving profile error: " + err.Error())
 		return SystemReturn{Status: 500, Body: err.Error()}
 	}
 
@@ -433,7 +433,7 @@ func newAccount(w http.ResponseWriter, req *httpRequest, s *Server) SystemReturn
 	// open profile acl file
 	f, err = os.OpenFile(resource.AclFile, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0644)
 	if err != nil {
-		s.debug.Println("Open profile acl error: " + err.Error())
+		s.logger.Debug("Open profile acl error: " + err.Error())
 		return SystemReturn{Status: 500, Body: err.Error()}
 	}
 	defer f.Close()
@@ -441,21 +441,21 @@ func newAccount(w http.ResponseWriter, req *httpRequest, s *Server) SystemReturn
 	// write profile acl to disk
 	err = s.fileHandler.WriteFile(g, f, constant.TextTurtle)
 	if err != nil {
-		s.debug.Println("Saving profile acl error: " + err.Error())
+		s.logger.Debug("Saving profile acl error: " + err.Error())
 		return SystemReturn{Status: 500, Body: err.Error()}
 	}
 
 	// Link from root meta file to the WebID
 	err = s.LinkToWebID(account)
 	if err != nil {
-		s.debug.Println("Error setting up workspaces: " + err.Error())
+		s.logger.Debug("Error setting up workspaces: " + err.Error())
 		return SystemReturn{Status: 500, Body: err.Error()}
 	}
 
 	// Create workspaces and preferencesFile
 	err = s.AddWorkspaces(account, len(req.FormValue("email")) > 0, g)
 	if err != nil {
-		s.debug.Println("Error setting up workspaces: " + err.Error())
+		s.logger.Debug("Error setting up workspaces: " + err.Error())
 		return SystemReturn{Status: 500, Body: err.Error()}
 	}
 
@@ -481,7 +481,7 @@ func newAccount(w http.ResponseWriter, req *httpRequest, s *Server) SystemReturn
 	// open account acl file
 	f, err = os.OpenFile(resource.AclFile, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0644)
 	if err != nil {
-		s.debug.Println("Create account acl error: " + err.Error())
+		s.logger.Debug("Create account acl error: " + err.Error())
 		return SystemReturn{Status: 500, Body: err.Error()}
 	}
 	defer f.Close()
@@ -489,14 +489,14 @@ func newAccount(w http.ResponseWriter, req *httpRequest, s *Server) SystemReturn
 	// write account acl to disk
 	err = s.fileHandler.WriteFile(g, f, constant.TextTurtle)
 	if err != nil {
-		s.debug.Println("Saving account acl error: " + err.Error())
+		s.logger.Debug("Saving account acl error: " + err.Error())
 		return SystemReturn{Status: 500, Body: err.Error()}
 	}
 
 	// Authenticate the user (set cookie)
 	err = s.userCookieSet(w, webidURI)
 	if err != nil {
-		s.debug.Println("Error setting new cookie: " + err.Error())
+		s.logger.Debug("Error setting new cookie: " + err.Error())
 		return SystemReturn{Status: 500, Body: err.Error()}
 	}
 	w.Header().Set("User", webidURI)
@@ -523,20 +523,20 @@ func newAccount(w http.ResponseWriter, req *httpRequest, s *Server) SystemReturn
 		certName := account.Name + " [on " + resource.Obj.Host + "]"
 		newSpkac, err := NewSPKACx509(webidURI, certName, spkac)
 		if err != nil {
-			s.debug.Println("NewSPKACx509 error: " + err.Error())
+			s.logger.Debug("NewSPKACx509 error: " + err.Error())
 			return SystemReturn{Status: 500, Body: err.Error()}
 		}
 
 		pubKey, err := ParseSPKAC(spkac)
 		if err != nil {
-			s.debug.Println("ParseSPKAC error: " + err.Error())
+			s.logger.Debug("ParseSPKAC error: " + err.Error())
 		}
 		rsaPub := pubKey.(*rsa.PublicKey)
 		mod := fmt.Sprintf("%x", rsaPub.N)
 		exp := fmt.Sprintf("%d", rsaPub.E)
 		err = s.AddCertKeys(webidURI, mod, exp)
 		if err != nil {
-			s.debug.Println("Couldn't add cert keys to profile: " + err.Error())
+			s.logger.Debug("Couldn't add cert keys to profile: " + err.Error())
 		}
 
 		ua := req.Header.Get("User-Agent")
@@ -564,14 +564,14 @@ func newCert(w http.ResponseWriter, req *httpRequest, s *Server) SystemReturn {
 		certName := name + " [on " + resource.Obj.Host + "]"
 		newSpkac, err := NewSPKACx509(webidURI, certName, spkac)
 		if err != nil {
-			s.debug.Println("NewSPKACx509 error: " + err.Error())
+			s.logger.Debug("NewSPKACx509 error: " + err.Error())
 			return SystemReturn{Status: 500, Body: err.Error()}
 		}
-		s.debug.Println("Generated new cert for " + webidURI)
+		s.logger.Debug("Generated new cert for " + webidURI)
 
 		// Append cert to profile if it's the case
 		loggedUser := w.Header().Get("User")
-		s.debug.Println("Checking if request is authenticated: " + loggedUser)
+		s.logger.Debug("Checking if request is authenticated: " + loggedUser)
 		if len(loggedUser) > 0 && loggedUser == webidURI && strings.HasPrefix(webidURI, resource.Base) {
 			acl := NewWAC(loggedUser, "")
 			aclStatus, err := s.AllowWrite(acl, req.Header.Get("Origin"), strings.Split(webidURI, "#")[0])
@@ -581,7 +581,7 @@ func newCert(w http.ResponseWriter, req *httpRequest, s *Server) SystemReturn {
 
 			pubKey, err := ParseSPKAC(spkac)
 			if err != nil {
-				s.debug.Println("ParseSPKAC error: " + err.Error())
+				s.logger.Debug("ParseSPKAC error: " + err.Error())
 				return SystemReturn{Status: 500, Body: err.Error()}
 			}
 			rsaPub := pubKey.(*rsa.PublicKey)
@@ -589,15 +589,15 @@ func newCert(w http.ResponseWriter, req *httpRequest, s *Server) SystemReturn {
 			exp := fmt.Sprintf("%d", rsaPub.E)
 			err = s.AddCertKeys(webidURI, mod, exp)
 			if err != nil {
-				s.debug.Println("Couldn't add cert keys to profile: " + err.Error())
+				s.logger.Debug("Couldn't add cert keys to profile: " + err.Error())
 				return SystemReturn{Status: 500, Body: err.Error()}
 			}
-			s.debug.Println("Also added cert public key to " + webidURI)
+			s.logger.Debug("Also added cert public key to " + webidURI)
 		} else {
-			s.debug.Println("Not authenticated / local user: " + loggedUser + " != " + webidURI + " on " + resource.Base)
+			s.logger.Debug("Not authenticated / local user: " + loggedUser + " != " + webidURI + " on " + resource.Base)
 		}
 
-		s.debug.Println("Done issuing new cert for " + webidURI)
+		s.logger.Debug("Done issuing new cert for " + webidURI)
 
 		ua := req.Header.Get("User-Agent")
 		if strings.Contains(ua, "Chrome") {
@@ -639,17 +639,17 @@ func accountStatus(w http.ResponseWriter, req *httpRequest, s *Server) SystemRet
 
 	data, err := ioutil.ReadAll(req.Body)
 	if err != nil {
-		s.debug.Println("Read body error: " + err.Error())
+		s.logger.Debug("Read body error: " + err.Error())
 		return SystemReturn{Status: 500, Body: err.Error()}
 	}
 	if len(data) == 0 {
-		s.debug.Println("Empty request for accountStatus API")
+		s.logger.Debug("Empty request for accountStatus API")
 		return SystemReturn{Status: 500, Body: "Empty request for accountStatus API"}
 	}
 	var accReq accountRequest
 	err = json.Unmarshal(data, &accReq)
 	if err != nil {
-		s.debug.Println("Unmarshal error: " + err.Error())
+		s.logger.Debug("Unmarshal error: " + err.Error())
 		return SystemReturn{Status: 500, Body: err.Error()}
 	}
 	accReq.AccountName = strings.ToLower(accReq.AccountName)
@@ -664,13 +664,13 @@ func accountStatus(w http.ResponseWriter, req *httpRequest, s *Server) SystemRet
 	isAvailable := true
 	resource, _ = s.pathInformer.GetPathInfo(accURL)
 
-	s.debug.Println("Checking if account <" + accReq.AccountName + "> exists...")
+	s.logger.Debug("Checking if account <" + accReq.AccountName + "> exists...")
 	stat, err := os.Stat(resource.File)
 	if err != nil {
-		s.debug.Println("Stat error: " + err.Error())
+		s.logger.Debug("Stat error: " + err.Error())
 	}
 	if stat != nil && stat.IsDir() {
-		s.debug.Println("Found " + s.Config.DataRoot + accName + "." + resource.Root)
+		s.logger.Debug("Found " + s.Config.DataRoot + accName + "." + resource.Root)
 		isAvailable = false
 	}
 
@@ -687,7 +687,7 @@ func accountStatus(w http.ResponseWriter, req *httpRequest, s *Server) SystemRet
 	}
 	jsonData, err := json.Marshal(res)
 	if err != nil {
-		s.debug.Println("Marshal error: " + err.Error())
+		s.logger.Debug("Marshal error: " + err.Error())
 	}
 	return SystemReturn{Status: 200, Body: string(jsonData)}
 }

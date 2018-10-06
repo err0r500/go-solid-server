@@ -91,3 +91,7 @@ type TokenStorer interface {
 type WebDavHandler interface {
 	ServeHTTP(w http.ResponseWriter, r *http.Request)
 }
+
+type Debug interface {
+	Debug(v ...interface{})
+}

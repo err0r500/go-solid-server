@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
-	"log"
 	"net"
 	"net/http"
 	"net/url"
@@ -31,7 +30,7 @@ type Server struct {
 	Config domain.ServerConfig
 
 	cookieManager  uc.CookieManager
-	debug          *log.Logger // fixme abstract logging
+	logger         uc.Debug // fixme abstract logging
 	fileHandler    uc.FilesHandler
 	httpCaller     uc.HttpCaller
 	mailer         uc.Mailer
@@ -193,7 +192,7 @@ func TwinqlQuery(w http.ResponseWriter, req *httpRequest, s *Server) *response {
 
 	err := s.ProxyReq(w, req, s.Config.QueryTemplate)
 	if err != nil {
-		s.debug.Println("Query error:", err.Error())
+		s.logger.Debug("Query error:", err.Error())
 	}
 	return r
 }
@@ -265,7 +264,7 @@ func (s Server) GetHead(w http.ResponseWriter, req *httpRequest, resource *domai
 	if resource.IsDir && glob == false && !strings.HasSuffix(req.BaseURI(), "/") {
 		w.Header().Set(constant.HCType, contentType)
 		urlStr := resource.URI
-		s.debug.Println("Redirecting to", urlStr)
+		s.logger.Debug("Redirecting to", urlStr)
 		http.Redirect(w, req.Request, urlStr, 301)
 		return
 	}
@@ -328,7 +327,7 @@ func (s Server) GetHead(w http.ResponseWriter, req *httpRequest, resource *domai
 					//TODO load file manager app from local preference file
 					w.Header().Set(constant.HCType, contentType)
 					urlStr := s.Config.DirApp + resource.Obj.Scheme + "/" + resource.Obj.Host + "/" + resource.Obj.Path + "?" + req.Request.URL.RawQuery
-					s.debug.Println("Redirecting to", urlStr)
+					s.logger.Debug("Redirecting to", urlStr)
 					http.Redirect(w, req.Request, urlStr, 303)
 					return
 				}
@@ -440,7 +439,7 @@ func (s Server) GetHead(w http.ResponseWriter, req *httpRequest, resource *domai
 										// Open an input file, exit on error.
 										fd, err := os.Open(f.File)
 										if err != nil {
-											s.debug.Println("GET find mime type error:" + err.Error())
+											s.logger.Debug("GET find mime type error:" + err.Error())
 										}
 										defer fd.Close()
 
@@ -463,7 +462,7 @@ func (s Server) GetHead(w http.ResponseWriter, req *httpRequest, resource *domai
 										}
 										// log potential errors
 										if err := scanner.Err(); err != nil {
-											s.debug.Println("GET scan err: " + scanner.Err().Error())
+											s.logger.Debug("GET scan err: " + scanner.Err().Error())
 										}
 									}
 								}
@@ -491,7 +490,7 @@ func (s Server) GetHead(w http.ResponseWriter, req *httpRequest, resource *domai
 		if !maybeRDF && magicType == constant.TextPlain {
 			maybeRDF = true
 		}
-		s.debug.Println("Setting CType to:", magicType)
+		s.logger.Debug("Setting CType to:", magicType)
 		status = 200
 
 		if req.Method == "GET" && strings.Contains(contentType, constant.TextHtml) {
@@ -508,7 +507,7 @@ func (s Server) GetHead(w http.ResponseWriter, req *httpRequest, resource *domai
 			if err == nil {
 				defer func() {
 					if err := f.Close(); err != nil {
-						s.debug.Println("GET os.Open err: " + err.Error())
+						s.logger.Debug("GET os.Open err: " + err.Error())
 					}
 				}()
 				io.Copy(w, f)
@@ -534,7 +533,7 @@ func (s Server) GetHead(w http.ResponseWriter, req *httpRequest, resource *domai
 			if err == nil {
 				defer func() {
 					if err := f.Close(); err != nil {
-						s.debug.Println("GET f.Close err:" + err.Error())
+						s.logger.Debug("GET f.Close err:" + err.Error())
 					}
 				}()
 				io.Copy(w, f)
@@ -582,7 +581,7 @@ func (s *Server) Patch(w http.ResponseWriter, req *httpRequest, resource *domain
 	}
 
 	if dataHasParser {
-		s.debug.Println("Preparing to PATCH resource", resource.URI, "with file", resource.File)
+		s.logger.Debug("Preparing to PATCH resource", resource.URI, "with file", resource.File)
 		buf, _ := ioutil.ReadAll(req.Body)
 		body := ioutil.NopCloser(bytes.NewBuffer(buf))
 
@@ -590,7 +589,7 @@ func (s *Server) Patch(w http.ResponseWriter, req *httpRequest, resource *domain
 
 		if req.Header.Get("Content-Length") == "0" || len(buf) == 0 {
 			errmsg := "Could not patch resource. No SPARQL statements found in the request."
-			s.debug.Println(errmsg)
+			s.logger.Debug(errmsg)
 			return r.respond(400, errmsg)
 		}
 
@@ -616,24 +615,24 @@ func (s *Server) Patch(w http.ResponseWriter, req *httpRequest, resource *domain
 		if !resource.Exists {
 			err := os.MkdirAll(_path.Dir(resource.File), 0755)
 			if err != nil {
-				s.debug.Println("PATCH MkdirAll err: " + err.Error())
+				s.logger.Debug("PATCH MkdirAll err: " + err.Error())
 				return r.respond(500, err)
 			}
 		}
 
 		f, err := os.OpenFile(resource.File, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0664)
 		if err != nil {
-			s.debug.Println("PATCH os.OpenFile err: " + err.Error())
+			s.logger.Debug("PATCH os.OpenFile err: " + err.Error())
 			return r.respond(500, err)
 		}
 		defer f.Close()
 
 		err = s.fileHandler.WriteFile(g, f, constant.TextTurtle)
 		if err != nil {
-			s.debug.Println("PATCH g.WriteFile err: " + err.Error())
+			s.logger.Debug("PATCH g.WriteFile err: " + err.Error())
 			return r.respond(500, err)
 		}
-		s.debug.Println("Succefully PATCHed resource", resource.URI)
+		s.logger.Debug("Succefully PATCHed resource", resource.URI)
 		onUpdateURI(resource.URI)
 		onUpdateURI(resource.ParentURI)
 
@@ -704,7 +703,7 @@ func (s Server) Post(w http.ResponseWriter, req *httpRequest, resource *domain.P
 			}
 			resource, err = s.pathInformer.GetPathInfo(resource.Base + "/" + resource.Path)
 			if err != nil {
-				s.debug.Println("POST LDPC req.pathInfo err: " + err.Error())
+				s.logger.Debug("POST LDPC req.pathInfo err: " + err.Error())
 				return r.respond(500, err)
 			}
 
@@ -715,23 +714,23 @@ func (s Server) Post(w http.ResponseWriter, req *httpRequest, resource *domain.P
 
 			err = os.MkdirAll(resource.File, 0755)
 			if err != nil {
-				s.debug.Println("POST LDPC os.MkdirAll err: " + err.Error())
+				s.logger.Debug("POST LDPC os.MkdirAll err: " + err.Error())
 				return r.respond(500, err)
 			}
-			s.debug.Println("Created dir " + resource.File)
+			s.logger.Debug("Created dir " + resource.File)
 
 			buf := new(bytes.Buffer)
 			buf.ReadFrom(req.Body)
 			if buf.Len() > 0 {
 				f, err := os.OpenFile(resource.MetaFile, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0644)
 				if err != nil {
-					s.debug.Println("POST LDPC os.OpenFile err: " + err.Error())
+					s.logger.Debug("POST LDPC os.OpenFile err: " + err.Error())
 					return r.respond(500, err)
 				}
 				defer f.Close()
 				_, err = io.Copy(f, buf)
 				if err != nil {
-					s.debug.Println("POST io.Copy err: " + err.Error())
+					s.logger.Debug("POST io.Copy err: " + err.Error())
 				}
 			}
 
@@ -743,7 +742,7 @@ func (s Server) Post(w http.ResponseWriter, req *httpRequest, resource *domain.P
 
 		resource, err = s.pathInformer.GetPathInfo(resource.Base + "/" + resource.Path)
 		if err != nil {
-			s.debug.Println("POST LDPR req.pathInfo err: " + err.Error())
+			s.logger.Debug("POST LDPR req.pathInfo err: " + err.Error())
 			return r.respond(500, err)
 		}
 		w.Header().Set("Location", resource.URI)
@@ -756,16 +755,16 @@ func (s Server) Post(w http.ResponseWriter, req *httpRequest, resource *domain.P
 	if !resource.Exists {
 		err = os.MkdirAll(_path.Dir(resource.File), 0755)
 		if err != nil {
-			s.debug.Println("POST MkdirAll err: " + err.Error())
+			s.logger.Debug("POST MkdirAll err: " + err.Error())
 			return r.respond(500, err)
 		}
-		s.debug.Println("Created resource " + _path.Dir(resource.File))
+		s.logger.Debug("Created resource " + _path.Dir(resource.File))
 	}
 
 	if dataMime == "multipart/form-data" {
 		err := req.ParseMultipartForm(100000)
 		if err != nil {
-			s.debug.Println("POST parse multipart data err: " + err.Error())
+			s.logger.Debug("POST parse multipart data err: " + err.Error())
 		} else {
 			m := req.MultipartForm
 			for elt := range m.File {
@@ -774,7 +773,7 @@ func (s Server) Post(w http.ResponseWriter, req *httpRequest, resource *domain.P
 					file, err := files[i].Open()
 					defer file.Close()
 					if err != nil {
-						s.debug.Println("POST multipart/form f.Open err: " + err.Error())
+						s.logger.Debug("POST multipart/form f.Open err: " + err.Error())
 						return r.respond(500, err)
 					}
 					newFile := ""
@@ -786,11 +785,11 @@ func (s Server) Post(w http.ResponseWriter, req *httpRequest, resource *domain.P
 					dst, err := os.OpenFile(newFile, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0644)
 					defer dst.Close()
 					if err != nil {
-						s.debug.Println("POST multipart/form os.Create err: " + err.Error())
+						s.logger.Debug("POST multipart/form os.Create err: " + err.Error())
 						return r.respond(500, err)
 					}
 					if _, err := io.Copy(dst, file); err != nil {
-						s.debug.Println("POST multipart/form io.Copy err: " + err.Error())
+						s.logger.Debug("POST multipart/form io.Copy err: " + err.Error())
 						return r.respond(500, err)
 					}
 					location := &url.URL{Path: files[i].Filename}
@@ -828,28 +827,28 @@ func (s Server) Post(w http.ResponseWriter, req *httpRequest, resource *domain.P
 			}
 			f, err := os.OpenFile(resource.File, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0644)
 			if err != nil {
-				s.debug.Println("POST os.OpenFile err: " + err.Error())
+				s.logger.Debug("POST os.OpenFile err: " + err.Error())
 				return r.respond(500, err.Error())
 			}
 			defer f.Close()
 			if g.Len() > 0 {
 				err = s.fileHandler.WriteFile(g, f, constant.TextTurtle)
 				if err != nil {
-					s.debug.Println("POST g.WriteFile err: " + err.Error())
+					s.logger.Debug("POST g.WriteFile err: " + err.Error())
 				} else {
-					s.debug.Println("Wrote resource file: " + resource.File)
+					s.logger.Debug("Wrote resource file: " + resource.File)
 				}
 			}
 		} else {
 			f, err := os.OpenFile(resource.File, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0644)
 			if err != nil {
-				s.debug.Println("POST os.OpenFile err: " + err.Error())
+				s.logger.Debug("POST os.OpenFile err: " + err.Error())
 				return r.respond(500, err.Error())
 			}
 			defer f.Close()
 			_, err = io.Copy(f, req.Body)
 			if err != nil {
-				s.debug.Println("POST os.OpenFile err: " + err.Error())
+				s.logger.Debug("POST os.OpenFile err: " + err.Error())
 				return r.respond(500, err.Error())
 			}
 		}
@@ -902,7 +901,7 @@ func (s Server) Put(w http.ResponseWriter, req *httpRequest, resource *domain.Pa
 	if len(link) > 0 && link == "http://www.w3.org/ns/ldp#BasicContainer" {
 		err := os.MkdirAll(resource.File, 0755)
 		if err != nil {
-			s.debug.Println("PUT MkdirAll err: " + err.Error())
+			s.logger.Debug("PUT MkdirAll err: " + err.Error())
 			return r.respond(500, err)
 		}
 		// refresh resource and set the right headers
@@ -917,13 +916,13 @@ func (s Server) Put(w http.ResponseWriter, req *httpRequest, resource *domain.Pa
 	}
 	err = os.MkdirAll(_path.Dir(resource.File), 0755)
 	if err != nil {
-		s.debug.Println("PUT MkdirAll err: " + err.Error())
+		s.logger.Debug("PUT MkdirAll err: " + err.Error())
 		return r.respond(500, err)
 	}
 
 	f, err := os.OpenFile(resource.File, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0644)
 	if err != nil {
-		s.debug.Println("PUT os.OpenFile err: " + err.Error())
+		s.logger.Debug("PUT os.OpenFile err: " + err.Error())
 		if resource.IsDir {
 			w.Header().Add("Link", s.uriManipulator.Brack(resource.URI)+"; rel=\"describedby\"")
 			return r.respond(406, "406 - Cannot use PUT on a directory.")
@@ -934,7 +933,7 @@ func (s Server) Put(w http.ResponseWriter, req *httpRequest, resource *domain.Pa
 
 	_, err = io.Copy(f, req.Body)
 	if err != nil {
-		s.debug.Println("PUT io.Copy err: " + err.Error())
+		s.logger.Debug("PUT io.Copy err: " + err.Error())
 	}
 
 	if err != nil {
@@ -1030,11 +1029,11 @@ func (s *Server) handle(w http.ResponseWriter, req *httpRequest) (r *response) {
 
 	defer func() {
 		if rec := recover(); rec != nil {
-			s.debug.Println("\nRecovered from panic: ", rec)
+			s.logger.Debug("\nRecovered from panic: ", rec)
 		}
 	}()
 
-	s.debug.Println("\n------ New " + req.Method + " request from " + req.RemoteAddr + " ------")
+	s.logger.Debug("\n------ New " + req.Method + " request from " + req.RemoteAddr + " ------")
 
 	// CORS
 	w.Header().Set("Access-Control-Allow-Credentials", "true")
@@ -1075,7 +1074,7 @@ func (s *Server) handle(w http.ResponseWriter, req *httpRequest) (r *response) {
 	if strings.HasSuffix(req.URL.Path, constant.ProxyPath) {
 		err = s.ProxyReq(w, req, s.Config.ProxyTemplate+req.FormValue("uri"))
 		if err != nil {
-			s.debug.Println("Proxy error:", err.Error())
+			s.logger.Debug("Proxy error:", err.Error())
 		}
 		return
 	}
@@ -1085,16 +1084,16 @@ func (s *Server) handle(w http.ResponseWriter, req *httpRequest) (r *response) {
 		return TwinqlQuery(w, req, s)
 	}
 
-	//s.debug.Println(req.RemoteAddr + " requested resource URI: " + req.URL.String())
-	//s.debug.Println(req.RemoteAddr + " requested resource Path: " + resource.File)
+	//s.logger.Debug(req.RemoteAddr + " requested resource URI: " + req.URL.String())
+	//s.logger.Debug(req.RemoteAddr + " requested resource Path: " + resource.File)
 
 	dataMime := req.Header.Get(constant.HCType)
 	dataMime = strings.Split(dataMime, ";")[0]
 	dataHasParser := len(mime.MimeParser[dataMime]) > 0
 	if len(dataMime) > 0 {
-		s.debug.Println("Content-Type: " + dataMime)
+		s.logger.Debug("Content-Type: " + dataMime)
 		if dataMime != "multipart/form-data" && !dataHasParser && req.Method != "PUT" && req.Method != "HEAD" && req.Method != "OPTIONS" {
-			s.debug.Println("Request contains unsupported Media Type:" + dataMime)
+			s.logger.Debug("Request contains unsupported Media Type:" + dataMime)
 			return r.respond(415, "HTTP 415 - Unsupported Media Type:", dataMime)
 		}
 		req.ContentType = dataMime
@@ -1106,7 +1105,7 @@ func (s *Server) handle(w http.ResponseWriter, req *httpRequest) (r *response) {
 	if len(acceptList) > 0 && acceptList[0].SubType != "*" {
 		contentType, err = acceptList.Negotiate(mime.SerializerMimes...)
 		if err != nil {
-			s.debug.Println("Accept type not acceptable: " + err.Error())
+			s.logger.Debug("Accept type not acceptable: " + err.Error())
 			return r.respond(406, "HTTP 406 - Accept type not acceptable: "+err.Error())
 		}
 		req.AcceptType = contentType
@@ -1204,13 +1203,13 @@ func (s *Server) ProxyReq(w http.ResponseWriter, req *httpRequest, reqUrl string
 	if len(req.FormValue("key")) > 0 {
 		token, err := decodeQuery(req.FormValue("key"))
 		if err != nil {
-			s.debug.Println(err.Error())
+			s.logger.Debug(err.Error())
 		}
 		user, err := s.GetAuthzFromToken(token, req)
 		if err != nil {
-			s.debug.Println(err.Error())
+			s.logger.Debug(err.Error())
 		} else {
-			s.debug.Println("HAuthorization valid for user", user)
+			s.logger.Debug("HAuthorization valid for user", user)
 		}
 		req.User = user
 	}
@@ -1218,13 +1217,13 @@ func (s *Server) ProxyReq(w http.ResponseWriter, req *httpRequest, reqUrl string
 	if len(req.Header.Get(constant.HAuthorization)) > 0 {
 		token, err := ParseBearerAuthorizationHeader(req.Header.Get(constant.HAuthorization))
 		if err != nil {
-			s.debug.Println(err.Error())
+			s.logger.Debug(err.Error())
 		}
 		user, err := s.GetAuthzFromToken(token, req)
 		if err != nil {
-			s.debug.Println(err.Error())
+			s.logger.Debug(err.Error())
 		} else {
-			s.debug.Println("HAuthorization valid for user", user)
+			s.logger.Debug("HAuthorization valid for user", user)
 		}
 		req.User = user
 	}

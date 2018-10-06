@@ -24,20 +24,12 @@ import (
 	"github.com/err0r500/go-solid-server/domain"
 	"github.com/err0r500/go-solid-server/mime"
 	"github.com/err0r500/go-solid-server/uc"
-
-	"golang.org/x/net/webdav"
-)
-
-var (
-	debugFlags  = log.Flags() | log.Lshortfile
-	debugPrefix = "[debug] "
 )
 
 // Server object contains http handler, root where the data is found and whether it uses vhosts or not
 type Server struct {
-	http.Handler
+	Config domain.ServerConfig
 
-	Config         domain.ServerConfig
 	cookieManager  uc.CookieManager
 	debug          *log.Logger // fixme abstract logging
 	fileHandler    uc.FilesHandler
@@ -49,7 +41,7 @@ type Server struct {
 	templater      uc.Templater
 	tokenStorer    uc.TokenStorer
 	uriManipulator uc.URIManipulator
-	webdav         *webdav.Handler // fixme move elsewhere ?
+	webdavHandler  uc.WebDavHandler
 }
 
 type httpRequest struct { // fixme attempt to make it purely abstract
@@ -1023,13 +1015,13 @@ func (s Server) MkCol(w http.ResponseWriter, req *httpRequest, resource *domain.
 }
 
 func (s *Server) CopyMoveLockUnlock(w http.ResponseWriter, req *httpRequest, resource *domain.PathInfo, acl WAC) (r *response) {
-	aclWrite, err := s.AllowWrite(acl, req.Header.Get("Origin"), resource.URI)
-	if aclWrite > 200 || err != nil {
-		return r.respond(aclWrite, s.handleStatusText(aclWrite, err))
+	respCode, err := s.AllowWrite(acl, req.Header.Get("Origin"), resource.URI)
+	if respCode > 200 || err != nil {
+		return r.respond(respCode, s.handleStatusText(respCode, err))
 	}
 
-	s.webdav.ServeHTTP(w, req.Request)
-	return
+	s.webdavHandler.ServeHTTP(w, req.Request)
+	return nil // should not happen
 }
 
 func (s *Server) handle(w http.ResponseWriter, req *httpRequest) (r *response) {

@@ -18,14 +18,13 @@ import (
 	"github.com/err0r500/go-solid-server/mime"
 	"github.com/err0r500/go-solid-server/pathInfo"
 	"github.com/err0r500/go-solid-server/resources"
-	"golang.org/x/net/webdav"
 )
 
 // NewServer is used to create a new Server instance
 func NewServer(config domain.ServerConfig) *Server {
 	debugger := log.New(ioutil.Discard, "", 0)
 	if config.Debug {
-		debugger = log.New(os.Stderr, debugPrefix, debugFlags)
+		debugger = log.New(os.Stderr, "[debug] ", log.Flags()|log.Lshortfile)
 	}
 
 	s := &Server{
@@ -39,10 +38,10 @@ func NewServer(config domain.ServerConfig) *Server {
 		pathInformer:  pathInfo.New(config),
 		rdfHandler:    encoder.RdfEncoder{},
 		tokenStorer:   tokenStorer.New(config.BoltPath),
-		webdav: &webdav.Handler{
-			FileSystem: webdav.Dir(config.DataRoot),
-			LockSystem: webdav.NewMemLS(),
-		},
+		//webdav: &webdav.Handler{
+		//	FileSystem: webdav.Dir(config.DataRoot),
+		//	LockSystem: webdav.NewMemLS(),
+		//},
 	}
 
 	mime.AddRDFExtension(s.Config.ACLSuffix)

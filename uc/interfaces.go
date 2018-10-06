@@ -2,6 +2,7 @@ package uc
 
 import (
 	"io"
+	"net/http"
 	"os"
 
 	"github.com/err0r500/go-solid-server/domain"
@@ -85,4 +86,8 @@ type TokenStorer interface {
 	GetTokenByOrigin(tokenType, host, origin string) (string, error)
 	GetTokensByType(tokenType, host string) (map[string]map[string]string, error)
 	DeletePersistedToken(tokenType, host, token string) error
+}
+
+type WebDavHandler interface {
+	ServeHTTP(w http.ResponseWriter, r *http.Request)
 }

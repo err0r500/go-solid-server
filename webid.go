@@ -328,22 +328,15 @@ func (s *Server) AddCertKeys(uri string, mod string, exp string) error {
 	resource, _ := s.pathInformer.GetPathInfo(profileURI)
 
 	g := domain.NewGraph(profileURI)
-	s.fileHandler.ReadFile(g, s.parser, resource.File)
+	s.fileHandler.UpdateGraphFromFile(g, s.parser, resource.File)
 	g.AddTriple(userTerm, domain.NewNS("cert").Get("key"), keyTerm)
 	g.AddTriple(keyTerm, domain.NewNS("rdf").Get("type"), domain.NewNS("cert").Get("RSAPublicKey"))
 	g.AddTriple(keyTerm, domain.NewNS("rdfs").Get("label"), domain.NewLiteral("Created "+time.Now().Format(time.RFC822)+" on "+resource.Obj.Host))
 	g.AddTriple(keyTerm, domain.NewNS("cert").Get("modulus"), domain.NewLiteralWithDatatype(mod, domain.NewResource("http://www.w3.org/2001/XMLSchema#hexBinary")))
 	g.AddTriple(keyTerm, domain.NewNS("cert").Get("exponent"), domain.NewLiteralWithDatatype(exp, domain.NewResource("http://www.w3.org/2001/XMLSchema#int")))
 
-	// open account acl file
-	f, err := os.OpenFile(resource.File, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0644)
-	if err != nil {
-		return err
-	}
-	defer f.Close()
-
 	// write account acl to disk
-	err = s.fileHandler.WriteFile(g, f, constant.TextTurtle)
+	err := s.fileHandler.SaveGraph(g, resource.File, constant.TextTurtle)
 	if err != nil {
 		return err
 	}
@@ -398,15 +391,8 @@ func (s *Server) LinkToWebID(account webidAccount) error {
 	g := domain.NewGraph(resource.URI)
 	g.AddTriple(domain.NewResource(account.WebID), domain.NewNS("st").Get("account"), domain.NewResource(resource.URI))
 
-	// open account root meta file
-	f, err := os.OpenFile(resource.MetaFile, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0644)
-	if err != nil {
-		return err
-	}
-	defer f.Close()
-
 	// write account meta file to disk
-	err = s.fileHandler.WriteFile(g, f, constant.TextTurtle)
+	err := s.fileHandler.SaveGraph(g, resource.MetaFile, constant.TextTurtle)
 	if err != nil {
 		return err
 	}
@@ -419,7 +405,7 @@ func (s *Server) getAccountWebID(baseURI string) string {
 	if err == nil {
 		resource, _ = s.pathInformer.GetPathInfo(resource.Base)
 		g := domain.NewGraph(resource.MetaURI)
-		s.fileHandler.ReadFile(g, s.parser, resource.MetaFile)
+		s.fileHandler.UpdateGraphFromFile(g, s.parser, resource.MetaFile)
 		if g.Len() >= 1 {
 			webid := g.One(nil, domain.NewNS("st").Get("account"), domain.NewResource(resource.MetaURI))
 			if webid != nil {
@@ -480,15 +466,8 @@ func (s *Server) AddWorkspaces(account webidAccount, containsEmail bool, g *doma
 			a.AddTriple(appendAllTerm, domain.NewNS("acl").Get("mode"), domain.NewNS("acl").Get("Append"))
 		}
 
-		// open account acl file
-		f, err := os.OpenFile(resource.AclFile, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0644)
-		if err != nil {
-			return err
-		}
-		defer f.Close()
-
 		// write account acl to disk
-		err = s.fileHandler.WriteFile(a, f, constant.TextTurtle)
+		err = s.fileHandler.SaveGraph(a, resource.AclFile, constant.TextTurtle)
 		if err != nil {
 			return err
 		}
@@ -510,18 +489,12 @@ func (s *Server) AddWorkspaces(account webidAccount, containsEmail bool, g *doma
 	if err != nil {
 		return err
 	}
-	// open account acl file
-	f, err := os.OpenFile(resource.File, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0644)
-	if err != nil {
-		return err
-	}
 
 	// write account acl to disk
-	err = s.fileHandler.WriteFile(pref, f, constant.TextTurtle)
+	err = s.fileHandler.SaveGraph(pref, resource.File, constant.TextTurtle)
 	if err != nil {
 		return err
 	}
-	f.Close()
 
 	// write the typeIndex
 	s.createTypeIndex("ListedDocument", account.PubTypeIndex)
@@ -536,18 +509,10 @@ func (s *Server) createTypeIndex(indexType, url string) error {
 	typeIndex.AddTriple(domain.NewResource(url), domain.NewNS("rdf").Get("type"), domain.NewNS("st").Get(indexType))
 
 	resource, _ := s.pathInformer.GetPathInfo(url)
-	err := os.MkdirAll(_path.Dir(resource.File), 0755)
-	if err != nil {
-		return err
-	}
-	// open account acl file
-	f, err := os.OpenFile(resource.File, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0644)
-	if err != nil {
-		return err
-	}
-	defer f.Close()
 
 	// write account acl to disk
-	err = s.fileHandler.WriteFile(typeIndex, f, constant.TextTurtle)
-	return err
+	if err := s.fileHandler.SaveGraph(typeIndex, resource.File, constant.TextTurtle); err != nil {
+		s.logger.Debug("createTypeIndex", err)
+	}
+	return nil
 }

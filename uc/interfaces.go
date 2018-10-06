@@ -3,7 +3,6 @@ package uc
 import (
 	"io"
 	"net/http"
-	"os"
 
 	"github.com/err0r500/go-solid-server/domain"
 )
@@ -49,9 +48,9 @@ type Verifier interface {
 }
 
 type FilesHandler interface {
-	WriteFile(g *domain.Graph, file *os.File, mime string) error
+	SaveGraph(g *domain.Graph, path string, mime string) error
+	UpdateGraphFromFile(g *domain.Graph, encoder Encoder, filename string)
 	AppendFile(g *domain.Graph, filename string, baseURI string)
-	ReadFile(g *domain.Graph, encoder Encoder, filename string)
 	Exists(path string) bool
 }
 

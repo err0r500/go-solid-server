@@ -275,8 +275,8 @@ func (s Server) GetHead(w http.ResponseWriter, req *httpRequest, resource *domai
 			g.AddTriple(root, domain.NewResource("http://www.w3.org/ns/posix/stat#size"), domain.NewLiteral(fmt.Sprintf("%d", resource.Size)))
 
 			kb := domain.NewGraph(resource.MetaURI)
-			s.fileHandler.ReadFile(kb, s.parser, resource.MetaFile)
-			if kb.Len() > 0 {
+			s.fileHandler.UpdateGraphFromFile(kb, s.parser, resource.MetaFile)
+			if kb.NotEmpty() {
 				for triple := range kb.IterTriples() {
 					var subject domain.Term
 					if kb.One(domain.NewResource(resource.MetaURI), nil, nil) != nil {
@@ -349,8 +349,8 @@ func (s Server) GetHead(w http.ResponseWriter, req *httpRequest, resource *domai
 									g.AddTriple(_s, domain.NewResource("http://www.w3.org/1999/02/22-rdf-syntax-ns#type"), domain.NewResource("http://www.w3.org/ns/ldp#Container"))
 								}
 								kb := domain.NewGraph(f.URI)
-								s.fileHandler.ReadFile(kb, s.parser, f.MetaFile)
-								if kb.Len() > 0 {
+								s.fileHandler.UpdateGraphFromFile(kb, s.parser, f.MetaFile)
+								if kb.NotEmpty() {
 									for _, st := range kb.All(_s, domain.NewResource("http://www.w3.org/1999/02/22-rdf-syntax-ns#type"), nil) {
 										if st != nil && st.Object != nil {
 											g.AddTriple(_s, domain.NewResource("http://www.w3.org/1999/02/22-rdf-syntax-ns#type"), st.Object)
@@ -380,8 +380,8 @@ func (s Server) GetHead(w http.ResponseWriter, req *httpRequest, resource *domai
 										for scanner.Scan() {
 											if strings.HasPrefix(scanner.Text(), "@prefix") || strings.HasPrefix(scanner.Text(), "@base") {
 												kb := domain.NewGraph(f.URI)
-												s.fileHandler.ReadFile(kb, s.parser, f.File)
-												if kb.Len() > 0 {
+												s.fileHandler.UpdateGraphFromFile(kb, s.parser, f.File)
+												if kb.NotEmpty() {
 													for _, st := range kb.All(domain.NewResource(f.URI), domain.NewResource("http://www.w3.org/1999/02/22-rdf-syntax-ns#type"), nil) {
 														if st != nil && st.Object != nil {
 															g.AddTriple(_s, domain.NewResource("http://www.w3.org/1999/02/22-rdf-syntax-ns#type"), st.Object)
@@ -476,7 +476,7 @@ func (s Server) GetHead(w http.ResponseWriter, req *httpRequest, resource *domai
 	}
 
 	if maybeRDF {
-		s.fileHandler.ReadFile(g, s.parser, resource.File)
+		s.fileHandler.UpdateGraphFromFile(g, s.parser, resource.File)
 		w.Header().Set(constant.HCType, contentType)
 	}
 
@@ -525,7 +525,7 @@ func (s *Server) Patch(w http.ResponseWriter, req *httpRequest, resource *domain
 		}
 
 		g := domain.NewGraph(resource.URI)
-		s.fileHandler.ReadFile(g, s.parser, resource.File)
+		s.fileHandler.UpdateGraphFromFile(g, s.parser, resource.File)
 
 		switch dataMime {
 		case constant.ApplicationJSON:
@@ -540,27 +540,12 @@ func (s *Server) Patch(w http.ResponseWriter, req *httpRequest, resource *domain
 			}
 		}
 
-		if !resource.Exists {
-			err := os.MkdirAll(_path.Dir(resource.File), 0755)
-			if err != nil {
-				s.logger.Debug("PATCH MkdirAll err: " + err.Error())
-				return r.respond(500, err)
-			}
-		}
-
-		f, err := os.OpenFile(resource.File, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0664)
+		err = s.fileHandler.SaveGraph(g, resource.File, constant.TextTurtle)
 		if err != nil {
-			s.logger.Debug("PATCH os.OpenFile err: " + err.Error())
+			s.logger.Debug("PATCH g.SaveGraph err: " + err.Error())
 			return r.respond(500, err)
 		}
-		defer f.Close()
-
-		err = s.fileHandler.WriteFile(g, f, constant.TextTurtle)
-		if err != nil {
-			s.logger.Debug("PATCH g.WriteFile err: " + err.Error())
-			return r.respond(500, err)
-		}
-		s.logger.Debug("Succefully PATCHed resource", resource.URI)
+		s.logger.Debug("succefully patched resource", resource.URI)
 		onUpdateURI(resource.URI)
 		onUpdateURI(resource.ParentURI)
 
@@ -596,7 +581,7 @@ func (s Server) Post(w http.ResponseWriter, req *httpRequest, resource *domain.P
 
 	// LDP
 	isNew := false
-	if resource.IsDir && dataMime != "multipart/form-data" {
+	if resource.IsDir && dataMime != constant.MultipartFormData {
 		link := ParseLinkHeader(req.Header.Get("Link")).MatchRel("type")
 		slug := req.Header.Get("Slug")
 
@@ -680,7 +665,7 @@ func (s Server) Post(w http.ResponseWriter, req *httpRequest, resource *domain.P
 		isNew = true
 	}
 
-	if !resource.Exists {
+	if !resource.Exists { // fixme
 		err = os.MkdirAll(_path.Dir(resource.File), 0755)
 		if err != nil {
 			s.logger.Debug("POST MkdirAll err: " + err.Error())
@@ -689,7 +674,7 @@ func (s Server) Post(w http.ResponseWriter, req *httpRequest, resource *domain.P
 		s.logger.Debug("Created resource " + _path.Dir(resource.File))
 	}
 
-	if dataMime == "multipart/form-data" {
+	if dataMime == constant.MultipartFormData {
 		err := req.ParseMultipartForm(100000)
 		if err != nil {
 			s.logger.Debug("POST parse multipart data err: " + err.Error())
@@ -737,7 +722,7 @@ func (s Server) Post(w http.ResponseWriter, req *httpRequest, resource *domain.P
 
 		if dataHasParser {
 			g := domain.NewGraph(resource.URI)
-			s.fileHandler.ReadFile(g, s.parser, resource.File)
+			s.fileHandler.UpdateGraphFromFile(g, s.parser, resource.File)
 
 			switch dataMime {
 			case constant.ApplicationJSON:
@@ -749,16 +734,11 @@ func (s Server) Post(w http.ResponseWriter, req *httpRequest, resource *domain.P
 			default:
 				s.parser.Parse(g, req.Body, dataMime)
 			}
-			f, err := os.OpenFile(resource.File, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0644)
-			if err != nil {
-				s.logger.Debug("POST os.OpenFile err: " + err.Error())
-				return r.respond(500, err.Error())
-			}
-			defer f.Close()
-			if g.Len() > 0 {
-				err = s.fileHandler.WriteFile(g, f, constant.TextTurtle)
+
+			if g.NotEmpty() {
+				err = s.fileHandler.SaveGraph(g, resource.File, constant.TextTurtle)
 				if err != nil {
-					s.logger.Debug("POST g.WriteFile err: " + err.Error())
+					s.logger.Debug("POST g.SaveGraph err: " + err.Error())
 				} else {
 					s.logger.Debug("Wrote resource file: " + resource.File)
 				}
@@ -1016,7 +996,7 @@ func (s *Server) handle(w http.ResponseWriter, req *httpRequest) (r *response) {
 	dataHasParser := len(mime.MimeParser[dataMime]) > 0
 	if len(dataMime) > 0 {
 		s.logger.Debug("Content-Type: " + dataMime)
-		if dataMime != "multipart/form-data" && !dataHasParser && req.Method != "PUT" && req.Method != "HEAD" && req.Method != "OPTIONS" {
+		if dataMime != constant.MultipartFormData && !dataHasParser && req.Method != "PUT" && req.Method != "HEAD" && req.Method != "OPTIONS" {
 			s.logger.Debug("Request contains unsupported Media Type:" + dataMime)
 			return r.respond(415, "HTTP 415 - Unsupported Media Type:", dataMime)
 		}

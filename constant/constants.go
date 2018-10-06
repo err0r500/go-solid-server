@@ -24,6 +24,7 @@ const (
 	TextTurtle              = "text/turtle"
 	ApplicationJSON         = "application/json"
 	ApplicationSPARQLUpdate = "application/sparql-update"
+	MultipartFormData       = "multipart/form-data"
 
 	HAuthorization = "HAuthorization"
 )

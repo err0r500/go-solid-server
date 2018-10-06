@@ -859,7 +859,7 @@ func TestGraphPatch(t *testing.T) {
 //	assert.Equal(t, 200, response.StatusCode)
 //
 //	g := NewGraph(testServer.URL + "/" + file)
-//	g.ReadFile(file)
+//	g.UpdateGraphFromFile(file)
 //	assert.Equal(t, 1, g.Len())
 //	data, err := g.serialize((constant.TextTurtle))
 //	assert.NoError(t, err)

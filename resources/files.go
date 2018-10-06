@@ -8,6 +8,8 @@ import (
 
 	"github.com/err0r500/go-solid-server/uc"
 
+	_path "path"
+
 	"github.com/err0r500/go-solid-server/domain"
 )
 
@@ -21,8 +23,19 @@ func New(encoder uc.Encoder) uc.FilesHandler {
 	}
 }
 
-// WriteFile is used to dump RDF from a Graph into a file
-func (origFilesHandler) WriteFile(g *domain.Graph, file *os.File, mime string) error {
+// SaveGraph is used to dump RDF from a Graph into a file
+func (origFilesHandler) SaveGraph(g *domain.Graph, path string, mime string) error {
+	err := os.MkdirAll(_path.Dir(path), 0755)
+	if err != nil {
+		return err
+	}
+
+	f, err := os.OpenFile(path, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0664)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	// fixme : actually write the file!
 	//serializerName := mimeSerializer[mime]
 	//if len(serializerName) == 0 {
 	//	serializerName = "turtle"
@@ -67,8 +80,8 @@ func (h origFilesHandler) AppendFile(g *domain.Graph, filename string, baseURI s
 	h.rdfHandler.ParseBase(g, f, constant.TextTurtle, baseURI)
 }
 
-// ReadFile is used to read RDF data from a file into the graph
-func (origFilesHandler) ReadFile(g *domain.Graph, parser uc.Encoder, filename string) {
+// UpdateGraphFromFile is used to read RDF data from a file into the graph
+func (origFilesHandler) UpdateGraphFromFile(g *domain.Graph, parser uc.Encoder, filename string) {
 	stat, err := os.Stat(filename)
 	if os.IsNotExist(err) {
 		return

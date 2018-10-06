@@ -38,8 +38,8 @@ func (s *Server) allow(acl WAC, origin string, mode string, path string) (int, e
 		//acl.srv.debug.Println("Looking for policies in " + p.AclFile)
 
 		aclGraph := domain.NewGraph(p.AclURI)
-		s.fileHandler.ReadFile(aclGraph, s.parser, p.AclFile)
-		if aclGraph.Len() > 0 {
+		s.fileHandler.UpdateGraphFromFile(aclGraph, s.parser, p.AclFile)
+		if aclGraph.NotEmpty() {
 			//acl.srv.debug.Println("Found policies in " + p.AclFile)
 			// TODO make it more elegant instead of duplicating code
 			for _, i := range aclGraph.All(nil, domain.NewNS("acl").Get("mode"), domain.NewNS("acl").Get("Control")) {
@@ -74,7 +74,7 @@ func (s *Server) allow(acl WAC, origin string, mode string, path string) (int, e
 						groupURI := s.uriManipulator.Debrack(t.Object.String())
 						groupGraph := domain.NewGraph(groupURI)
 						s.httpCaller.LoadURI(groupGraph, groupURI)
-						if groupGraph.Len() > 0 && groupGraph.One(t.Object, domain.NewNS("rdf").Get("type"), domain.NewNS("foaf").Get("Group")) != nil {
+						if groupGraph.NotEmpty() && groupGraph.One(t.Object, domain.NewNS("rdf").Get("type"), domain.NewNS("foaf").Get("Group")) != nil {
 							for range groupGraph.All(t.Object, domain.NewNS("foaf").Get("member"), domain.NewResource(acl.user)) {
 								//acl.srv.debug.Println(acl.user + " listed as a member of the group " + groupURI)
 								return 200, nil
@@ -129,7 +129,7 @@ func (s *Server) allow(acl WAC, origin string, mode string, path string) (int, e
 						groupURI := s.uriManipulator.Debrack(t.Object.String())
 						groupGraph := domain.NewGraph(groupURI)
 						s.httpCaller.LoadURI(groupGraph, groupURI)
-						if groupGraph.Len() > 0 && groupGraph.One(t.Object, domain.NewNS("rdf").Get("type"), domain.NewNS("foaf").Get("Group")) != nil {
+						if groupGraph.NotEmpty() && groupGraph.One(t.Object, domain.NewNS("rdf").Get("type"), domain.NewNS("foaf").Get("Group")) != nil {
 							for range groupGraph.All(t.Object, domain.NewNS("foaf").Get("member"), domain.NewResource(acl.user)) {
 								//acl.srv.debug.Println(acl.user + " listed as a member of the group " + groupURI)
 								return 200, nil

@@ -25,6 +25,10 @@ func (g *Graph) Len() int {
 	return len(g.triples)
 }
 
+func (g *Graph) NotEmpty() bool {
+	return len(g.triples) > 0
+}
+
 // Term returns a Graph Term object
 func (g *Graph) Term() Term {
 	return g.term

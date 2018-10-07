@@ -157,9 +157,6 @@ func (s *Server) Options(w http.ResponseWriter, req *httpRequest, resource *doma
 }
 
 func (s Server) GetHead(w http.ResponseWriter, req *httpRequest, resource *domain.PathInfo, contentType string, acl WAC) (r *response) {
-	unlock := lock(resource.File)
-	defer unlock()
-
 	var (
 		magicType = resource.FileType
 		maybeRDF  bool
@@ -490,9 +487,6 @@ func (s Server) GetHead(w http.ResponseWriter, req *httpRequest, resource *domai
 }
 
 func (s *Server) Patch(w http.ResponseWriter, req *httpRequest, resource *domain.PathInfo, dataHasParser bool, dataMime string, acl WAC) (r *response) {
-	unlock := lock(resource.File)
-	defer unlock()
-
 	// check append first
 	aclAppend, err := s.AllowAppend(acl, req.Header.Get("Origin"), resource.URI)
 	if aclAppend > 200 || err != nil {
@@ -556,10 +550,6 @@ func (s *Server) Patch(w http.ResponseWriter, req *httpRequest, resource *domain
 }
 
 func (s Server) Post(w http.ResponseWriter, req *httpRequest, resource *domain.PathInfo, dataHasParser bool, dataMime string, acl WAC) (r *response) {
-	unlock := lock(resource.File)
-	defer unlock()
-	updateURI := resource.URI
-
 	// check append first
 	aclAppend, err := s.AllowAppend(acl, req.Header.Get("Origin"), resource.URI)
 	if aclAppend > 200 || err != nil {
@@ -610,7 +600,7 @@ func (s Server) Post(w http.ResponseWriter, req *httpRequest, resource *domain.P
 		}
 		resource.Path += slug
 
-		if len(link) > 0 && link == "http://www.w3.org/ns/ldp#BasicContainer" {
+		if link == "http://www.w3.org/ns/ldp#BasicContainer" {
 			if !strings.HasSuffix(resource.Path, "/") {
 				resource.Path += "/"
 			}
@@ -665,53 +655,34 @@ func (s Server) Post(w http.ResponseWriter, req *httpRequest, resource *domain.P
 		isNew = true
 	}
 
-	if !resource.Exists { // fixme
-		err = os.MkdirAll(_path.Dir(resource.File), 0755)
+	if dataMime == constant.MultipartFormData {
+		reader, err := req.MultipartReader()
 		if err != nil {
-			s.logger.Debug("POST MkdirAll err: " + err.Error())
 			return r.respond(500, err)
 		}
-		s.logger.Debug("Created resource " + _path.Dir(resource.File))
-	}
 
-	if dataMime == constant.MultipartFormData {
-		err := req.ParseMultipartForm(100000)
-		if err != nil {
-			s.logger.Debug("POST parse multipart data err: " + err.Error())
-		} else {
-			m := req.MultipartForm
-			for elt := range m.File {
-				files := m.File[elt]
-				for i := range files {
-					file, err := files[i].Open()
-					defer file.Close()
-					if err != nil {
-						s.logger.Debug("POST multipart/form f.Open err: " + err.Error())
-						return r.respond(500, err)
-					}
-					newFile := ""
-					if filepath.Base(resource.Path) == files[i].Filename {
-						newFile = resource.File
-					} else {
-						newFile = resource.File + files[i].Filename
-					}
-					dst, err := os.OpenFile(newFile, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0644)
-					defer dst.Close()
-					if err != nil {
-						s.logger.Debug("POST multipart/form os.Create err: " + err.Error())
-						return r.respond(500, err)
-					}
-					if _, err := io.Copy(dst, file); err != nil {
-						s.logger.Debug("POST multipart/form io.Copy err: " + err.Error())
-						return r.respond(500, err)
-					}
-					location := &url.URL{Path: files[i].Filename}
-					w.Header().Add("Location", resource.URI+location.String())
-				}
+		toStore := map[string]io.Reader{}
+		for {
+			part, err := reader.NextPart()
+			if err == io.EOF {
+				break
 			}
-			onUpdateURI(resource.URI)
-			return r.respond(201)
+
+			if part.FileName() == "" {
+				continue
+			}
+
+			toStore[part.FileName()] = part
+
+			location := &url.URL{Path: part.FileName()}
+			w.Header().Add("Location", resource.URI+location.String())
 		}
+
+		if err := s.fileHandler.SaveFiles(resource.File, toStore); err != nil {
+			return r.respond(500, err)
+		}
+		onUpdateURI(resource.URI)
+		return r.respond(201)
 	} else {
 		if !resource.Exists {
 			isNew = true
@@ -726,7 +697,9 @@ func (s Server) Post(w http.ResponseWriter, req *httpRequest, resource *domain.P
 
 			switch dataMime {
 			case constant.ApplicationJSON:
-				s.JSONPatch(g, req.Body)
+				if err := s.JSONPatch(g, req.Body); err != nil {
+					return r.respond(400, "failed to handle JSONPatch request")
+				}
 			case constant.ApplicationSPARQLUpdate:
 				if ecode, err := s.sparqlHandler.SPARQLUpdate(g, req.Body); err != nil {
 					return r.respond(ecode, "Error processing SPARQL Update: "+err.Error())
@@ -757,8 +730,8 @@ func (s Server) Post(w http.ResponseWriter, req *httpRequest, resource *domain.P
 			}
 		}
 
-		onUpdateURI(updateURI)
-		if updateURI != resource.ParentURI {
+		onUpdateURI(resource.URI)
+		if resource.URI != resource.ParentURI {
 			onUpdateURI(resource.ParentURI)
 		}
 		if isNew {
@@ -771,9 +744,6 @@ func (s Server) Post(w http.ResponseWriter, req *httpRequest, resource *domain.P
 }
 
 func (s Server) Put(w http.ResponseWriter, req *httpRequest, resource *domain.PathInfo, acl WAC) (r *response) {
-	unlock := lock(resource.File)
-	defer unlock()
-
 	// LDP header
 	w.Header().Add("Link", s.uriManipulator.Brack("http://www.w3.org/ns/ldp#Resource")+"; rel=\"type\"")
 
@@ -855,9 +825,6 @@ func (s Server) Put(w http.ResponseWriter, req *httpRequest, resource *domain.Pa
 }
 
 func (s Server) Delete(w http.ResponseWriter, req *httpRequest, resource *domain.PathInfo, acl WAC) (r *response) {
-	unlock := lock(resource.Path)
-	defer unlock()
-
 	aclWrite, err := s.AllowWrite(acl, req.Header.Get("Origin"), resource.URI)
 	if aclWrite > 200 || err != nil {
 		return r.respond(aclWrite, s.handleStatusText(aclWrite, err))
@@ -866,6 +833,7 @@ func (s Server) Delete(w http.ResponseWriter, req *httpRequest, resource *domain
 	if len(resource.Path) == 0 {
 		return r.respond(500, "500 - Cannot DELETE root (/)")
 	}
+
 	// remove ACL and meta files first
 	if resource.File != resource.AclFile {
 		_ = os.Remove(resource.AclFile)
@@ -890,9 +858,6 @@ func (s Server) Delete(w http.ResponseWriter, req *httpRequest, resource *domain
 }
 
 func (s Server) MkCol(w http.ResponseWriter, req *httpRequest, resource *domain.PathInfo, acl WAC) (r *response) {
-	unlock := lock(resource.File)
-	defer unlock()
-
 	aclWrite, err := s.AllowWrite(acl, req.Header.Get("Origin"), resource.URI)
 	if aclWrite > 200 || err != nil {
 		return r.respond(aclWrite, s.handleStatusText(aclWrite, err))
@@ -964,7 +929,7 @@ func (s *Server) handle(w http.ResponseWriter, req *httpRequest) (r *response) {
 	}
 
 	// Intercept API requests
-	if strings.Contains(req.Request.URL.Path, "/"+constant.SystemPrefix) && req.Method != "OPTIONS" {
+	if req.TargetsAPI() {
 		resp := HandleSystem(w, req, s)
 		if resp.Bytes != nil && len(resp.Bytes) > 0 {
 			// copy raw bytes
@@ -1079,6 +1044,8 @@ func (Server) JSONPatch(g *domain.Graph, r io.Reader) error {
 					g.AddTriple(subject, predicate, domain.NewResource(o.Value))
 				case "literal":
 					g.AddTriple(subject, predicate, domain.NewLiteral(o.Value))
+				default:
+					//todo check this : do nothing ??
 				}
 			}
 		}

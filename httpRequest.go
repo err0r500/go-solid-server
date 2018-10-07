@@ -4,6 +4,8 @@ import (
 	"net"
 	"net/http"
 	"strings"
+
+	"github.com/err0r500/go-solid-server/constant"
 )
 
 type httpRequest struct { // fixme attempt to make it purely abstract
@@ -14,6 +16,10 @@ type httpRequest struct { // fixme attempt to make it purely abstract
 	User        string
 	IsOwner     bool
 	wac         WAC
+}
+
+func (req httpRequest) TargetsAPI() bool {
+	return strings.Contains(req.Request.URL.Path, "/"+constant.SystemPrefix) && req.Method != "OPTIONS"
 }
 
 func (req httpRequest) BaseURI() string {

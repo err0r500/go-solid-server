@@ -1,6 +1,7 @@
 package resources
 
 import (
+	"io"
 	"log"
 	"os"
 
@@ -23,10 +24,23 @@ func New(encoder uc.Encoder) uc.FilesHandler {
 	}
 }
 
+func (origFilesHandler) SaveFiles(folder string, files map[string]io.Reader) error {
+	if err := createFolderIfNeeded(folder); err != nil {
+		return err
+	}
+
+	for filename, reader := range files {
+		if err := saveFile(filename, reader); err != nil { //todo : check if needs to add folder to filename ?
+			return err
+		}
+	}
+
+	return nil
+}
+
 // SaveGraph is used to dump RDF from a Graph into a file
 func (origFilesHandler) SaveGraph(g *domain.Graph, path string, mime string) error {
-	err := os.MkdirAll(_path.Dir(path), 0755)
-	if err != nil {
+	if err := createFolderIfNeeded(path); err != nil {
 		return err
 	}
 
@@ -103,4 +117,23 @@ func (origFilesHandler) UpdateGraphFromFile(g *domain.Graph, parser uc.Encoder, 
 func (origFilesHandler) Exists(path string) bool {
 	_, err := os.Stat(path)
 	return err == nil
+}
+
+func createFolderIfNeeded(path string) error {
+	return os.MkdirAll(_path.Dir(path), 0755)
+}
+
+func saveFile(path string, reader io.Reader) error {
+	dst, err := os.Create(path)
+	defer dst.Close()
+
+	if err != nil {
+		return err
+	}
+
+	if _, err := io.Copy(dst, reader); err != nil {
+		return err
+	}
+
+	return nil
 }

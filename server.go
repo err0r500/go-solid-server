@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
-	"log"
 	"net/http"
 	"net/url"
 	"os"
@@ -111,7 +110,6 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	}()
 
 	r := s.handle(w, reqHandler.NewRequestGetter(req))
-	log.Println(r)
 	for key, value := range r.headers {
 		for _, v := range value {
 			w.Header().Add(key, v)
@@ -197,7 +195,6 @@ func (s Server) GetHead(w http.ResponseWriter, req uc.RequestGetter, resource *d
 	}
 
 	if !resource.Exists {
-		log.Println("")
 		return r.respond(404, s.templater.NotFound())
 	}
 
@@ -716,6 +713,10 @@ func (s Server) Post(w http.ResponseWriter, req uc.SafeRequestGetter, resource *
 				s.parser.Parse(g, req.Body(), dataMime)
 			}
 
+			if err := s.fileHandler.Create(resource.File); err != nil {
+				return r.respond(500, err.Error())
+			}
+
 			if g.NotEmpty() {
 				err = s.fileHandler.SaveGraph(g, resource.File, constant.TextTurtle)
 				if err != nil {
@@ -998,24 +999,14 @@ func (s *Server) handle(w http.ResponseWriter, req uc.RequestGetter) *response {
 	case "GET", "HEAD":
 		return s.GetHead(w, req, resource, contentType, acl)
 	case "PATCH":
-
-		log.Println("")
 		return s.Patch(w, req, resource, dataHasParser, dataMime, acl)
 	case "POST":
-
-		log.Println("")
 		return s.Post(w, req, resource, dataHasParser, dataMime, acl)
 	case "PUT":
-
-		log.Println("")
 		return s.Put(w, req, resource, acl)
 	case "DELETE":
-
-		log.Println("")
 		return s.Delete(w, req, resource, acl)
 	case "MKCOL":
-
-		log.Println("")
 		s.MkCol(w, req, resource, acl)
 	//case "COPY", "MOVE", "LOCK", "UNLOCK":
 	//	s.CopyMoveLockUnlock(w, req, resource, acl)

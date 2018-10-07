@@ -94,8 +94,20 @@ func (h origFilesHandler) AppendFile(g *domain.Graph, filename string, baseURI s
 	h.rdfHandler.ParseBase(g, f, constant.TextTurtle, baseURI)
 }
 
+func (origFilesHandler) Create(path string) error {
+	f, err := os.OpenFile(path, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0644)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	return nil
+}
+
 // UpdateGraphFromFile is used to read RDF data from a file into the graph
 func (origFilesHandler) UpdateGraphFromFile(g *domain.Graph, parser uc.Encoder, filename string) {
+	log.Println(g.Len())
+
 	stat, err := os.Stat(filename)
 	if os.IsNotExist(err) {
 		return
@@ -105,6 +117,7 @@ func (origFilesHandler) UpdateGraphFromFile(g *domain.Graph, parser uc.Encoder, 
 		log.Println(err)
 		return
 	}
+
 	f, err := os.OpenFile(filename, os.O_RDONLY, 0)
 	defer f.Close()
 	if err != nil {

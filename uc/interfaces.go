@@ -49,6 +49,7 @@ type Verifier interface {
 }
 
 type FilesHandler interface {
+	Create(path string) error
 	SaveFiles(folder string, files map[string]io.Reader) error
 	SaveGraph(g *domain.Graph, path string, mime string) error
 	UpdateGraphFromFile(g *domain.Graph, encoder Encoder, filename string)

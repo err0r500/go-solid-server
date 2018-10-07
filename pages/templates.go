@@ -6,8 +6,8 @@ type pageTemplates struct {
 	systemPrefix string
 }
 
-func New() uc.Templater {
-	return pageTemplates{}
+func New(systemPrefix string) uc.Templater {
+	return pageTemplates{systemPrefix: systemPrefix}
 }
 
 func (pageTemplates) Login(...string) string {

@@ -7,13 +7,13 @@
 
 	"TLSKey": "/Users/user/keys/key.pem",
 
-	"DataRoot": "/Users/user/gold-data/",
+	"DataRoot": "/home/matth/",
 
 	"Vhosts": true,
 
-	"Insecure": false,
+	"Insecure": true,
 
-	"Debug": false,
+	"Debug": true,
 
 	"CookieAge": 8736,
 
@@ -25,9 +25,9 @@
 
 	"DataApp":  "tabulator",
 
-	"DirApp":   "http://linkeddata.github.io/warp/#list/",
+	"DirApp":   "http://vacances.leboncoin.fr/warp/#list/",
 
-	"SignUpApp": "https://solid.github.io/solid-signup/?domain=",
+	"SignUpApp": "http://vacances.leboncoin.fr/?domain=",
 
 	"DirIndex":  ["index.html", "index.htm"],
 

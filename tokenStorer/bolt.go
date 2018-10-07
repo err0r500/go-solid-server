@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log"
 	"time"
 
 	"github.com/err0r500/go-solid-server/uc"
@@ -18,11 +17,7 @@ type boltStorage struct {
 	db          *bolt.DB
 }
 
-func New(path string) uc.TokenStorer {
-	db, err := bolt.Open(path, 0644, nil)
-	if err != nil {
-		log.Fatal("failed to start bolt db")
-	}
+func New(db *bolt.DB) uc.TokenStorer {
 	return boltStorage{db: db}
 }
 

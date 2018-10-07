@@ -8,9 +8,11 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/err0r500/go-solid-server/logger"
+	"github.com/boltdb/bolt"
 
-	"github.com/err0r500/go-solid-server/webdav"
+	"github.com/err0r500/go-solid-server/pages"
+
+	"github.com/err0r500/go-solid-server/logger"
 
 	"github.com/err0r500/go-solid-server/tokenStorer"
 
@@ -31,18 +33,28 @@ func NewServer(config domain.ServerConfig) *Server {
 		debugger = logger.New(log.New(os.Stderr, "[debug] ", log.Flags()|log.Lshortfile))
 	}
 
+	db, err := bolt.Open(config.BoltPath, 0644, nil)
+	if err != nil {
+		log.Fatal("failed to start bolt db")
+	}
+	defer db.Close()
+
 	s := &Server{
-		Config:        config,
-		cookieManager: cookies.New(),
-		logger:        debugger,
-		fileHandler:   resources.New(encoder.New()),
-		httpCaller:    httpCaller.New(),
-		mailer:        mail.New(domain.EmailConfig{}),
-		parser:        encoder.New(),
-		pathInformer:  pathInfo.New(config),
-		rdfHandler:    encoder.RdfEncoder{},
-		tokenStorer:   tokenStorer.New(config.BoltPath),
-		webdavHandler: webdav.New(config.DataRoot),
+		Config: config,
+
+		cookieManager:  cookies.New(),
+		logger:         debugger,
+		fileHandler:    resources.New(encoder.New()),
+		httpCaller:     httpCaller.New(),
+		mailer:         mail.New(domain.EmailConfig{}),
+		pathInformer:   pathInfo.New(config),
+		parser:         encoder.New(),
+		rdfHandler:     encoder.RdfEncoder{},
+		templater:      pages.New(config.DataRoot),
+		tokenStorer:    tokenStorer.New(db),
+		uriManipulator: domain.URIHandler{},
+
+		//webdavHandler: webdav.New(config.DataRoot),
 	}
 
 	mime.AddRDFExtension(s.Config.ACLSuffix)

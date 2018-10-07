@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"log"
 	"net/http"
 	"net/url"
 	"os"
@@ -42,7 +43,7 @@ type Server struct {
 	templater      uc.Templater
 	tokenStorer    uc.TokenStorer
 	uriManipulator uc.URIManipulator
-	webdavHandler  uc.WebDavHandler
+	//webdavHandler  uc.WebDavHandler
 }
 
 func (s Server) handleStatusText(status int, err error) string {
@@ -64,8 +65,20 @@ func (s Server) handleStatusText(status int, err error) string {
 
 type response struct {
 	status  int
-	headers http.Header
+	headers map[string][]string
 	argv    []interface{}
+}
+
+func (r *response) HeaderAdd(key, value string) {
+	r.headers[key] = append(r.headers[key], value)
+}
+
+func (r *response) HeaderSet(key, value string) {
+	r.headers[key] = []string{value}
+}
+
+func (r *response) HeaderDel(key string) {
+	r.headers[key] = []string{}
 }
 
 func (r *response) respond(status int, a ...interface{}) *response {
@@ -98,10 +111,13 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	}()
 
 	r := s.handle(w, reqHandler.NewRequestGetter(req))
-
-	for key := range r.headers {
-		w.Header().Set(key, r.headers.Get(key))
+	log.Println(r)
+	for key, value := range r.headers {
+		for _, v := range value {
+			w.Header().Add(key, v)
+		}
 	}
+
 	if r.status > 0 {
 		w.WriteHeader(r.status)
 	}
@@ -122,7 +138,8 @@ func TwinqlQuery(w http.ResponseWriter, req uc.SafeRequestGetter, s *Server, use
 	return r
 }
 
-func (s *Server) Options(w http.ResponseWriter, req uc.SafeRequestGetter, resource *domain.PathInfo) (r *response) {
+func (s *Server) Options(w http.ResponseWriter, req uc.SafeRequestGetter, resource *domain.PathInfo) *response {
+	r := &response{}
 	// TODO: WAC
 	corsReqH := req.HeaderComplete("Access-Control-Request-Headers") // CORS preflight only
 	if len(corsReqH) > 0 {
@@ -150,7 +167,8 @@ func (s *Server) Options(w http.ResponseWriter, req uc.SafeRequestGetter, resour
 	return r.respond(200)
 }
 
-func (s Server) GetHead(w http.ResponseWriter, req uc.RequestGetter, resource *domain.PathInfo, contentType string, acl WAC) (r *response) {
+func (s Server) GetHead(w http.ResponseWriter, req uc.RequestGetter, resource *domain.PathInfo, contentType string, acl WAC) *response {
+	r := &response{}
 	var (
 		magicType = resource.FileType
 		maybeRDF  bool
@@ -179,16 +197,17 @@ func (s Server) GetHead(w http.ResponseWriter, req uc.RequestGetter, resource *d
 	}
 
 	if !resource.Exists {
+		log.Println("")
 		return r.respond(404, s.templater.NotFound())
 	}
 
 	// First redirect to path + trailing slash if it's missing
-	if resource.IsDir && glob == false && !strings.HasSuffix(req.BaseURI(), "/") {
+	if resource.IsDir && !glob && !strings.HasSuffix(req.BaseURI(), "/") {
 		w.Header().Set(constant.HCType, contentType)
 		urlStr := resource.URI
 		s.logger.Debug("Redirecting to", urlStr)
 		http.Redirect(w, req.Request(), urlStr, 301)
-		return
+		return r
 	}
 
 	// overwrite ACL Link header
@@ -199,7 +218,7 @@ func (s Server) GetHead(w http.ResponseWriter, req uc.RequestGetter, resource *d
 		w.Header().Set(constant.HCType, contentType)
 		urlStr := s.Config.SignUpApp + url.QueryEscape(resource.Obj.Scheme+"://"+resource.Obj.Host+"/"+constant.SystemPrefix+"/accountStatus")
 		http.Redirect(w, req.Request(), urlStr, 303)
-		return
+		return r
 	}
 
 	if resource.IsDir {
@@ -234,6 +253,7 @@ func (s Server) GetHead(w http.ResponseWriter, req uc.RequestGetter, resource *d
 	g := domain.NewGraph(resource.URI)
 	if resource.IsDir {
 		if len(s.Config.DirIndex) > 0 && contentType == constant.TextHtml {
+
 			magicType = constant.TextHtml
 			maybeRDF = false
 			for _, dirIndex := range s.Config.DirIndex {
@@ -249,9 +269,10 @@ func (s Server) GetHead(w http.ResponseWriter, req uc.RequestGetter, resource *d
 					//TODO load file manager app from local preference file
 					w.Header().Set(constant.HCType, contentType)
 					urlStr := s.Config.DirApp + resource.Obj.Scheme + "/" + resource.Obj.Host + "/" + resource.Obj.Path + "?" + req.URLRawQuery()
+
 					s.logger.Debug("Redirecting to", urlStr)
 					http.Redirect(w, req.Request(), urlStr, 303)
-					return
+					return r
 				}
 			}
 		} else {
@@ -278,7 +299,6 @@ func (s Server) GetHead(w http.ResponseWriter, req uc.RequestGetter, resource *d
 					g.AddTriple(subject, triple.Predicate, triple.Object)
 				}
 			}
-
 			if glob {
 				matches, err := filepath.Glob(globPath)
 				if err == nil {
@@ -434,7 +454,7 @@ func (s Server) GetHead(w http.ResponseWriter, req uc.RequestGetter, resource *d
 				}()
 				io.Copy(w, f)
 			}
-			return
+			return r
 		}
 	}
 
@@ -463,7 +483,7 @@ func (s Server) GetHead(w http.ResponseWriter, req uc.RequestGetter, resource *d
 		} else {
 			w.WriteHeader(status)
 		}
-		return
+		return r
 	}
 
 	if maybeRDF {
@@ -477,10 +497,13 @@ func (s Server) GetHead(w http.ResponseWriter, req uc.RequestGetter, resource *d
 	} else if len(data) > 0 {
 		fmt.Fprint(w, data)
 	}
-	return
+
+	return r
 }
 
 func (s *Server) Patch(w http.ResponseWriter, req uc.SafeRequestGetter, resource *domain.PathInfo, dataHasParser bool, dataMime string, acl WAC) (r *response) {
+	r = &response{}
+
 	// check append first
 	aclAppend, err := s.AllowAppend(acl, req.Header("Origin"), resource.URI)
 	if aclAppend > 200 || err != nil {
@@ -544,6 +567,8 @@ func (s *Server) Patch(w http.ResponseWriter, req uc.SafeRequestGetter, resource
 }
 
 func (s Server) Post(w http.ResponseWriter, req uc.SafeRequestGetter, resource *domain.PathInfo, dataHasParser bool, dataMime string, acl WAC) (r *response) {
+	r = &response{}
+
 	// check append first
 	aclAppend, err := s.AllowAppend(acl, req.Header("Origin"), resource.URI)
 	if aclAppend > 200 || err != nil {
@@ -726,7 +751,8 @@ func (s Server) Post(w http.ResponseWriter, req uc.SafeRequestGetter, resource *
 	return r.respond(500)
 }
 
-func (s Server) Put(w http.ResponseWriter, req uc.RequestGetter, resource *domain.PathInfo, acl WAC) (r *response) {
+func (s Server) Put(w http.ResponseWriter, req uc.RequestGetter, resource *domain.PathInfo, acl WAC) *response {
+	r := &response{}
 	// LDP header
 	w.Header().Add("Link", s.uriManipulator.Brack("http://www.w3.org/ns/ldp#Resource")+"; rel=\"type\"")
 
@@ -771,6 +797,7 @@ func (s Server) Put(w http.ResponseWriter, req uc.RequestGetter, resource *domai
 		onUpdateURI(resource.ParentURI)
 		return r.respond(201)
 	}
+
 	err = os.MkdirAll(_path.Dir(resource.File), 0755)
 	if err != nil {
 		s.logger.Debug("PUT MkdirAll err: " + err.Error())
@@ -807,7 +834,9 @@ func (s Server) Put(w http.ResponseWriter, req uc.RequestGetter, resource *domai
 	return r.respond(200)
 }
 
-func (s Server) Delete(w http.ResponseWriter, req uc.SafeRequestGetter, resource *domain.PathInfo, acl WAC) (r *response) {
+func (s Server) Delete(w http.ResponseWriter, req uc.SafeRequestGetter, resource *domain.PathInfo, acl WAC) *response {
+	r := &response{}
+
 	aclWrite, err := s.AllowWrite(acl, req.Header("Origin"), resource.URI)
 	if aclWrite > 200 || err != nil {
 		return r.respond(aclWrite, s.handleStatusText(aclWrite, err))
@@ -837,10 +866,12 @@ func (s Server) Delete(w http.ResponseWriter, req uc.SafeRequestGetter, resource
 	}
 	onDeleteURI(resource.URI)
 	onUpdateURI(resource.ParentURI)
-	return
+	return r
 }
 
-func (s Server) MkCol(w http.ResponseWriter, req uc.SafeRequestGetter, resource *domain.PathInfo, acl WAC) (r *response) {
+func (s Server) MkCol(w http.ResponseWriter, req uc.SafeRequestGetter, resource *domain.PathInfo, acl WAC) *response {
+	r := &response{}
+
 	aclWrite, err := s.AllowWrite(acl, req.Header("Origin"), resource.URI)
 	if aclWrite > 200 || err != nil {
 		return r.respond(aclWrite, s.handleStatusText(aclWrite, err))
@@ -865,18 +896,18 @@ func (s Server) MkCol(w http.ResponseWriter, req uc.SafeRequestGetter, resource 
 	return r.respond(201)
 }
 
-func (s *Server) CopyMoveLockUnlock(w http.ResponseWriter, req uc.RequestGetter, resource *domain.PathInfo, acl WAC) (r *response) {
-	respCode, err := s.AllowWrite(acl, req.Header("Origin"), resource.URI)
-	if respCode > 200 || err != nil {
-		return r.respond(respCode, s.handleStatusText(respCode, err))
-	}
+//func (s *Server) CopyMoveLockUnlock(w http.ResponseWriter, req uc.RequestGetter, resource *domain.PathInfo, acl WAC) (r *response) {
+//	respCode, err := s.AllowWrite(acl, req.Header("Origin"), resource.URI)
+//	if respCode > 200 || err != nil {
+//		return r.respond(respCode, s.handleStatusText(respCode, err))
+//	}
+//
+//	s.webdavHandler.HandleReq(w, req.Request())
+//	return nil // should not happen
+//}
 
-	s.webdavHandler.HandleReq(w, req.Request())
-	return nil // should not happen
-}
-
-func (s *Server) handle(w http.ResponseWriter, req uc.RequestGetter) (r *response) {
-	r = new(response)
+func (s *Server) handle(w http.ResponseWriter, req uc.RequestGetter) *response {
+	r := &response{}
 	var err error
 
 	defer func() {
@@ -884,8 +915,6 @@ func (s *Server) handle(w http.ResponseWriter, req uc.RequestGetter) (r *respons
 			s.logger.Debug("\nRecovered from panic: ", rec)
 		}
 	}()
-
-	//s.logger.Debug("\n------ New " + req.Method + " request from " + req.RemoteAddr + " ------")
 
 	// CORS
 	w.Header().Set("Access-Control-Allow-Credentials", "true")
@@ -898,12 +927,11 @@ func (s *Server) handle(w http.ResponseWriter, req uc.RequestGetter) (r *respons
 
 	// Authentication
 	user := s.authn(req, w)
-	isOwner := false
-	//req.User = user
 	w.Header().Set("User", user)
 	acl := NewWAC(user, req.FormValue("key"))
 
 	// check if is owner
+	isOwner := false
 	resource, _ := s.pathInformer.GetPathInfo(req.BaseURI())
 	if len(user) > 0 {
 		if aclStatus, err := s.AllowWrite(acl, req.Header("Origin"), resource.Base); aclStatus == 200 && err == nil {
@@ -916,18 +944,17 @@ func (s *Server) handle(w http.ResponseWriter, req uc.RequestGetter) (r *respons
 		resp := HandleSystem(w, req, s, user, isOwner)
 		if resp.Bytes != nil && len(resp.Bytes) > 0 {
 			io.Copy(w, bytes.NewReader(resp.Bytes))
-			return
+			return r
 		}
 		return r.respond(resp.Status, resp.Body)
 	}
 
 	// Proxy requests
 	if strings.HasSuffix(req.URLPath(), constant.ProxyPath) {
-		err = s.ProxyReq(w, req, s.Config.ProxyTemplate+req.FormValue("uri"), user)
-		if err != nil {
+		if err := s.ProxyReq(w, req, s.Config.ProxyTemplate+req.FormValue("uri"), user); err != nil {
 			s.logger.Debug("Proxy error:", err.Error())
 		}
-		return
+		return r
 	}
 
 	// Query requests
@@ -935,19 +962,13 @@ func (s *Server) handle(w http.ResponseWriter, req uc.RequestGetter) (r *respons
 		return TwinqlQuery(w, req, s, user)
 	}
 
-	//s.logger.Debug(req.RemoteAddr + " requested resource URI: " + req.URL.String())
-	//s.logger.Debug(req.RemoteAddr + " requested resource Path: " + resource.File)
-
-	dataMime := req.Header(constant.HCType)
-	dataMime = strings.Split(dataMime, ";")[0]
+	dataMime := strings.Split(req.Header(constant.HCType), ";")[0]
 	dataHasParser := len(mime.MimeParser[dataMime]) > 0
 	if len(dataMime) > 0 {
-		s.logger.Debug("Content-Type: " + dataMime)
 		if dataMime != constant.MultipartFormData && !dataHasParser && req.Method() != "PUT" && req.Method() != "HEAD" && req.Method() != "OPTIONS" {
 			s.logger.Debug("Request contains unsupported Media Type:" + dataMime)
 			return r.respond(415, "HTTP 415 - Unsupported Media Type:", dataMime)
 		}
-		//req.ContentType = dataMime
 	}
 
 	// Content Negotiation
@@ -959,7 +980,7 @@ func (s *Server) handle(w http.ResponseWriter, req uc.RequestGetter) (r *respons
 			s.logger.Debug("Accept type not acceptable: " + err.Error())
 			return r.respond(406, "HTTP 406 - Accept type not acceptable: "+err.Error())
 		}
-		//req.AcceptType = contentType
+		//req.AcceptType = contentType // todo : not used ?
 	}
 
 	// set ACL Link header
@@ -977,21 +998,31 @@ func (s *Server) handle(w http.ResponseWriter, req uc.RequestGetter) (r *respons
 	case "GET", "HEAD":
 		return s.GetHead(w, req, resource, contentType, acl)
 	case "PATCH":
+
+		log.Println("")
 		return s.Patch(w, req, resource, dataHasParser, dataMime, acl)
 	case "POST":
+
+		log.Println("")
 		return s.Post(w, req, resource, dataHasParser, dataMime, acl)
 	case "PUT":
+
+		log.Println("")
 		return s.Put(w, req, resource, acl)
 	case "DELETE":
+
+		log.Println("")
 		return s.Delete(w, req, resource, acl)
 	case "MKCOL":
+
+		log.Println("")
 		s.MkCol(w, req, resource, acl)
-	case "COPY", "MOVE", "LOCK", "UNLOCK":
-		s.CopyMoveLockUnlock(w, req, resource, acl)
+	//case "COPY", "MOVE", "LOCK", "UNLOCK":
+	//	s.CopyMoveLockUnlock(w, req, resource, acl)
 	default:
 		return r.respond(405, "405 - Method Not Allowed:", req.Method)
 	}
-	return
+	return r
 }
 
 type jsonPatch map[string]map[string][]struct {
@@ -1006,10 +1037,11 @@ func (Server) JSONPatch(g *domain.Graph, r io.Reader) error {
 	if err != nil {
 		return err
 	}
-	err = json.Unmarshal(data, &v)
-	if err != nil {
+
+	if err := json.Unmarshal(data, &v); err != nil {
 		return err
 	}
+
 	base, _ := url.Parse(g.URI())
 	for s, sv := range v {
 		su, _ := base.Parse(s)
@@ -1081,7 +1113,7 @@ func (s *Server) ProxyReq(w http.ResponseWriter, req uc.SafeRequestGetter, reqUr
 		foundUser = user
 	}
 
-	// fixme removed proxying for now
+	// fixme removed proxying for now, enable it again after refactoring
 	//req.URL = uri
 	//req.Host = uri.Host
 	//req.RequestURI = uri.RequestURI()

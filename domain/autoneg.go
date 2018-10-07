@@ -10,7 +10,7 @@
 // Accept header to "*" (which is illegal) it will be interpreted as "*/*".
 // This has been observed in the wild, and the choice was made in the
 // spirit of being liberal in values that are accepted from the 'net.
-package gold
+package domain
 
 import (
 	"errors"
@@ -84,7 +84,7 @@ func (al AcceptList) Negotiate(alternatives ...string) (contentType string, err 
 }
 
 // Parse an Accept Header string returning a sorted list of clauses.
-func parseAccept(header string) (accept []Accept, err error) {
+func ParseAccept(header string) (accept []Accept, err error) {
 	header = strings.Trim(header, " ")
 	if len(header) == 0 {
 		accept = make([]Accept, 0)
@@ -145,23 +145,5 @@ func parseAccept(header string) (accept []Accept, err error) {
 	sorter := acceptSorter(accept)
 	sort.Sort(sorter)
 
-	return
-}
-
-// Parse the Accept header and return a sorted list of clauses. If the Accept header
-// is present but empty this will be an empty list. If the header is not present it will
-// default to a wildcard: */*. Returns an error if the Accept header is ill-formed.
-func (req *httpRequest) Accept() (al AcceptList, err error) {
-	var accept string
-	headers, ok := req.Header["Accept"]
-	if ok && len(headers) > 0 {
-		// if multiple Accept headers are specified just take the first one
-		// such a client would be quite broken...
-		accept = headers[0]
-	} else {
-		// default if not present
-		accept = "*/*"
-	}
-	al, err = parseAccept(accept)
 	return
 }

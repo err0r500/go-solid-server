@@ -13,6 +13,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/err0r500/go-solid-server/uc"
+
 	"github.com/err0r500/go-solid-server/constant"
 
 	"github.com/err0r500/go-solid-server/domain"
@@ -44,38 +46,33 @@ type statusResponse struct {
 	Response  accountResponse `json:"response"`
 }
 
-type accountInformation struct {
-	DiskUsed  string
-	DiskLimit string
-}
-
 // HandleSystem is a router for system specific APIs
-func HandleSystem(w http.ResponseWriter, req *httpRequest, s *Server) SystemReturn {
-	if strings.HasSuffix(req.Request.URL.Path, "status") {
+func HandleSystem(w http.ResponseWriter, req uc.RequestGetter, s *Server, user string, isOwner bool) SystemReturn {
+	if strings.HasSuffix(req.URLPath(), "status") {
 		// unsupported yet when server is running on one host
 		return accountStatus(w, req, s)
-	} else if strings.HasSuffix(req.Request.URL.Path, "new") {
+	} else if strings.HasSuffix(req.URLPath(), "new") {
 		return newAccount(w, req, s)
-	} else if strings.HasSuffix(req.Request.URL.Path, "cert") {
+	} else if strings.HasSuffix(req.URLPath(), "cert") {
 		return newCert(w, req, s)
-	} else if strings.HasSuffix(req.Request.URL.Path, "login") {
-		return s.logIn(w, req)
-	} else if strings.HasSuffix(req.Request.URL.Path, "logout") {
-		return logOut(w, req, s)
-	} else if strings.HasSuffix(req.Request.URL.Path, "tokens") {
-		return accountTokens(w, req, s)
-	} else if strings.HasSuffix(req.Request.URL.Path, "recovery") {
+	} else if strings.HasSuffix(req.URLPath(), "login") {
+		return s.logIn(w, req, user)
+	} else if strings.HasSuffix(req.URLPath(), "logout") {
+		return logOut(w, s)
+	} else if strings.HasSuffix(req.URLPath(), "tokens") {
+		return accountTokens(req, s, user, isOwner)
+	} else if strings.HasSuffix(req.URLPath(), "recovery") {
 		return accountRecovery(w, req, s)
 	}
 	return SystemReturn{Status: 200}
 }
 
-func logOut(w http.ResponseWriter, req *httpRequest, s *Server) SystemReturn {
+func logOut(w http.ResponseWriter, s *Server) SystemReturn {
 	s.userCookieDelete(w)
 	return SystemReturn{Status: 200, Body: "You have been signed out!"}
 }
 
-func (s *Server) logIn(w http.ResponseWriter, req *httpRequest) SystemReturn {
+func (s *Server) logIn(w http.ResponseWriter, req uc.RequestGetter, user string) SystemReturn {
 	var passL string
 	redirTo := req.FormValue("redirect")
 	origin := req.FormValue("origin")
@@ -83,13 +80,13 @@ func (s *Server) logIn(w http.ResponseWriter, req *httpRequest) SystemReturn {
 	s.logger.Debug("Got login request. Optional params: ", redirTo, origin)
 
 	// if cookie is set, just redirect
-	if len(req.User) > 0 {
+	if len(user) > 0 {
 		values := map[string]string{
-			"webid":  req.User,
+			"webid":  user,
 			"origin": origin,
 		}
 		// refresh cookie
-		err := s.userCookieSet(w, req.User)
+		err := s.userCookieSet(w, user)
 		if err != nil {
 			s.logger.Debug("Error setting new cookie: " + err.Error())
 			return SystemReturn{Status: 500, Body: err.Error()}
@@ -98,13 +95,13 @@ func (s *Server) logIn(w http.ResponseWriter, req *httpRequest) SystemReturn {
 		if len(redirTo) > 0 {
 			loginRedirect(w, req, s, values, redirTo)
 		}
-		return SystemReturn{Status: 200, Body: s.templater.LogoutTemplate(req.User)}
+		return SystemReturn{Status: 200, Body: s.templater.LogoutTemplate(user)}
 	}
 
 	webid := req.FormValue("webid")
 	passF := req.FormValue("password")
 
-	if req.Method == "GET" {
+	if req.Method() == "GET" {
 		// try to guess WebID from account
 		webid = s.getAccountWebID(req.BaseURI())
 		return SystemReturn{Status: 200, Body: s.templater.LoginTemplate(redirTo, origin, webid)}
@@ -161,17 +158,18 @@ func (s *Server) logIn(w http.ResponseWriter, req *httpRequest) SystemReturn {
 		loginRedirect(w, req, s, values, redirTo)
 	}
 
-	http.Redirect(w, req.Request, req.RequestURI, 301)
+	r := req.Request()
+	http.Redirect(w, r, r.RequestURI, 301)
 	return SystemReturn{Status: 200}
 }
 
-func loginRedirect(w http.ResponseWriter, req *httpRequest, s *Server, values map[string]string, redirTo string) SystemReturn {
+func loginRedirect(w http.ResponseWriter, req uc.RequestGetter, s *Server, values map[string]string, redirTo string) SystemReturn {
 	key := ""
 	// try to get existing token
-	key, err := s.tokenStorer.GetTokenByOrigin(constant.HAuthorization, req.Host, values["origin"])
+	key, err := s.tokenStorer.GetTokenByOrigin(constant.HAuthorization, req.Host(), values["origin"])
 	if err != nil || len(key) == 0 {
 		s.logger.Debug("Could not find a token for origin:", values["origin"])
-		key, err = s.tokenStorer.NewPersistedToken(constant.HAuthorization, req.Host, values)
+		key, err = s.tokenStorer.NewPersistedToken(constant.HAuthorization, req.Host(), values)
 		if err != nil {
 			s.logger.Debug("Could not generate authorization token for " + values["webid"] + ", err: " + err.Error())
 			return SystemReturn{Status: 500, Body: "Could not generate auth token for " + values["webid"] + ", err: " + err.Error()}
@@ -187,13 +185,13 @@ func loginRedirect(w http.ResponseWriter, req *httpRequest, s *Server, values ma
 	q.Set("key", key)
 	redir.RawQuery = q.Encode()
 	s.logger.Debug("Redirecting user to", redir.String())
-	http.Redirect(w, req.Request, redir.String(), 301)
+	http.Redirect(w, req.Request(), redir.String(), 301)
 	return SystemReturn{Status: 200}
 }
 
-func accountRecovery(w http.ResponseWriter, req *httpRequest, s *Server) SystemReturn {
+func accountRecovery(w http.ResponseWriter, req uc.SafeRequestGetter, s *Server) SystemReturn {
 	if len(req.FormValue("webid")) > 0 && strings.HasPrefix(req.FormValue("webid"), "http") {
-		return sendRecoveryToken(w, req, s)
+		return sendRecoveryToken(req, s)
 	} else if len(req.FormValue("token")) > 0 {
 		// validate or issue new password
 		return validateRecoveryToken(w, req, s)
@@ -203,7 +201,7 @@ func accountRecovery(w http.ResponseWriter, req *httpRequest, s *Server) SystemR
 	return SystemReturn{Status: 200, Body: s.templater.AccountRecoveryPage()}
 }
 
-func sendRecoveryToken(w http.ResponseWriter, req *httpRequest, s *Server) SystemReturn {
+func sendRecoveryToken(req uc.SafeRequestGetter, s *Server) SystemReturn {
 	webid := req.FormValue("webid")
 	// exit if not a local WebID
 	// log.Println("Host:" + req.Header.Get("Host"))
@@ -243,12 +241,12 @@ func sendRecoveryToken(w http.ResponseWriter, req *httpRequest, s *Server) Syste
 		return SystemReturn{Status: 400, Body: "Could not generate recovery token for " + webid + ", err: " + err.Error()}
 	}
 	// create recovery URL
-	IP, _, _ := net.SplitHostPort(req.Request.RemoteAddr)
+	//IP, _, _ := net.SplitHostPort(req.Request.RemoteAddr)
 	link := resource.Base + "/" + constant.SystemPrefix + "/recovery?token=" + encodeQuery(token)
 	// Setup message
 	params := make(map[string]string)
 	params["{{.To}}"] = email
-	params["{{.IP}}"] = IP
+	//params["{{.IP}}"] = IP
 	params["{{.Host}}"] = resource.Obj.Host
 	//params["{{.From}}"] = s.Config.SMTPConfig.Addr // fixme (should be property of the struct since it's not likely to change)
 	params["{{.Link}}"] = link
@@ -256,7 +254,7 @@ func sendRecoveryToken(w http.ResponseWriter, req *httpRequest, s *Server) Syste
 	return SystemReturn{Status: 200, Body: "You should receive an email shortly with further instructions."}
 }
 
-func validateRecoveryToken(w http.ResponseWriter, req *httpRequest, s *Server) SystemReturn {
+func validateRecoveryToken(w http.ResponseWriter, req uc.SafeRequestGetter, s *Server) SystemReturn {
 	token, err := decodeQuery(req.FormValue("token"))
 	if err != nil {
 		s.logger.Debug("Decode query err: " + err.Error())
@@ -326,11 +324,11 @@ func validateRecoveryToken(w http.ResponseWriter, req *httpRequest, s *Server) S
 	return SystemReturn{Status: 200, Body: s.templater.NewPassTemplate(token, "")}
 }
 
-func newAccount(w http.ResponseWriter, req *httpRequest, s *Server) SystemReturn {
+func newAccount(w http.ResponseWriter, req uc.SafeRequestGetter, s *Server) SystemReturn {
 	resource, _ := s.pathInformer.GetPathInfo(req.BaseURI())
-	host, port, _ := net.SplitHostPort(req.Host)
+	host, port, _ := net.SplitHostPort(req.Host())
 	if len(host) == 0 {
-		host = req.Host
+		host = req.Host()
 	}
 	if len(port) > 0 {
 		port = ":" + port
@@ -513,7 +511,7 @@ func newAccount(w http.ResponseWriter, req *httpRequest, s *Server) SystemReturn
 			s.logger.Debug("Couldn't add cert keys to profile: " + err.Error())
 		}
 
-		ua := req.Header.Get("User-Agent")
+		ua := req.Header("User-Agent")
 		if strings.Contains(ua, "Chrome") {
 			w.Header().Set(constant.HCType, "application/x-x509-user-cert; charset=utf-8")
 			return SystemReturn{Status: 200, Bytes: newSpkac}
@@ -526,7 +524,7 @@ func newAccount(w http.ResponseWriter, req *httpRequest, s *Server) SystemReturn
 	return SystemReturn{Status: 200, Body: ""}
 }
 
-func newCert(w http.ResponseWriter, req *httpRequest, s *Server) SystemReturn {
+func newCert(w http.ResponseWriter, req uc.SafeRequestGetter, s *Server) SystemReturn {
 	resource, _ := s.pathInformer.GetPathInfo(req.BaseURI())
 
 	name := req.FormValue("name")
@@ -548,7 +546,7 @@ func newCert(w http.ResponseWriter, req *httpRequest, s *Server) SystemReturn {
 		s.logger.Debug("Checking if request is authenticated: " + loggedUser)
 		if len(loggedUser) > 0 && loggedUser == webidURI && strings.HasPrefix(webidURI, resource.Base) {
 			acl := NewWAC(loggedUser, "")
-			aclStatus, err := s.AllowWrite(acl, req.Header.Get("Origin"), strings.Split(webidURI, "#")[0])
+			aclStatus, err := s.AllowWrite(acl, req.Header("Origin"), strings.Split(webidURI, "#")[0])
 			if aclStatus > 200 || err != nil {
 				return SystemReturn{Status: aclStatus, Body: err.Error()}
 			}
@@ -573,7 +571,7 @@ func newCert(w http.ResponseWriter, req *httpRequest, s *Server) SystemReturn {
 
 		s.logger.Debug("Done issuing new cert for " + webidURI)
 
-		ua := req.Header.Get("User-Agent")
+		ua := req.Header("User-Agent")
 		if strings.Contains(ua, "Chrome") {
 			w.Header().Set(constant.HCType, "application/x-x509-user-cert; charset=utf-8")
 			return SystemReturn{Status: 200, Bytes: newSpkac}
@@ -582,7 +580,7 @@ func newCert(w http.ResponseWriter, req *httpRequest, s *Server) SystemReturn {
 		body := `<iframe width="0" height="0" style="display: none;" src="data:application/x-x509-user-cert;base64,` + base64.StdEncoding.EncodeToString(newSpkac) + `"></iframe>`
 
 		return SystemReturn{Status: 200, Body: body}
-	} else if strings.Contains(req.Header.Get("Accept"), constant.TextHtml) {
+	} else if strings.Contains(req.Header("Accept"), constant.TextHtml) {
 		return SystemReturn{Status: 200, Body: s.templater.NewCert()}
 	}
 	return SystemReturn{Status: 500, Body: "Your request could not be processed. Either no WebID or no SPKAC value was provided."}
@@ -601,17 +599,17 @@ func newCert(w http.ResponseWriter, req *httpRequest, s *Server) SystemReturn {
 //            }
 // }
 // @@TODO treat exceptions
-func accountStatus(w http.ResponseWriter, req *httpRequest, s *Server) SystemReturn {
+func accountStatus(w http.ResponseWriter, req uc.SafeRequestGetter, s *Server) SystemReturn {
 	resource, _ := s.pathInformer.GetPathInfo(req.BaseURI())
-	host, port, _ := net.SplitHostPort(req.Host)
+	host, port, _ := net.SplitHostPort(req.Host())
 	if len(host) == 0 {
-		host = req.Host
+		host = req.Host()
 	}
 	if len(port) > 0 {
 		port = ":" + port
 	}
 
-	data, err := ioutil.ReadAll(req.Body)
+	data, err := ioutil.ReadAll(req.Body())
 	if err != nil {
 		s.logger.Debug("Read body error: " + err.Error())
 		return SystemReturn{Status: 500, Body: err.Error()}
@@ -651,7 +649,7 @@ func accountStatus(w http.ResponseWriter, req *httpRequest, s *Server) SystemRet
 	res := statusResponse{
 		Method:    "status",
 		Status:    status,
-		FormURL:   resource.Obj.Scheme + "://" + req.Host + "/" + constant.SystemPrefix + "/new",
+		FormURL:   resource.Obj.Scheme + "://" + req.Host() + "/" + constant.SystemPrefix + "/new",
 		LoginURL:  accURL + constant.SystemPrefix + "/login",
 		LogoutURL: accURL + constant.SystemPrefix + "/logout",
 		Response: accountResponse{
@@ -666,11 +664,11 @@ func accountStatus(w http.ResponseWriter, req *httpRequest, s *Server) SystemRet
 	return SystemReturn{Status: 200, Body: string(jsonData)}
 }
 
-func accountTokens(w http.ResponseWriter, req *httpRequest, s *Server) SystemReturn {
-	if len(req.User) == 0 {
+func accountTokens(req uc.SafeRequestGetter, s *Server, user string, isOwner bool) SystemReturn {
+	if len(user) == 0 {
 		return SystemReturn{Status: 401, Body: s.templater.Unauthorized(req.FormValue("redirect"), "")}
 	}
-	if !req.IsOwner {
+	if !isOwner {
 		return SystemReturn{Status: 403, Body: "You are not allowed to view this page"}
 	}
 
@@ -678,14 +676,14 @@ func accountTokens(w http.ResponseWriter, req *httpRequest, s *Server) SystemRet
 
 	if len(req.FormValue("revokeAuthz")) > 0 {
 		delStatus := "<p style=\"color: green;\">Successfully revoked token!</p>"
-		err := s.tokenStorer.DeletePersistedToken(constant.HAuthorization, req.Host, req.FormValue("revokeAuthz"))
+		err := s.tokenStorer.DeletePersistedToken(constant.HAuthorization, req.Host(), req.FormValue("revokeAuthz"))
 		if err != nil {
 			delStatus = "<p>Could not revoke token. Error: " + err.Error() + "</p>"
 		}
 		tokensHtml += delStatus
 	}
 
-	tokens, err := s.tokenStorer.GetTokensByType(constant.HAuthorization, req.Host)
+	tokens, err := s.tokenStorer.GetTokensByType(constant.HAuthorization, req.Host())
 	tokensHtml += "<h2>HAuthorization tokens for applications</h2>\n"
 	tokensHtml += "<div>"
 	if err == nil {

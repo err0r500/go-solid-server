@@ -2,11 +2,14 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-package gold
+package domain_test
 
 import (
 	"net/http"
 	"testing"
+
+	"github.com/err0r500/go-solid-server/domain"
+	"github.com/err0r500/go-solid-server/reqHandler"
 
 	"github.com/err0r500/go-solid-server/constant"
 	"github.com/err0r500/go-solid-server/mime"
@@ -18,11 +21,12 @@ var (
 	rdflib = "application/rdf+xml;q=0.9, application/xhtml+xml;q=0.3, text/xml;q=0.2, application/xml;q=0.2, text/html;q=0.3, text/plain;q=0.1, text/n3;q=1.0, application/x-turtle;q=1, text/turtle;q=1"
 )
 
-func mockAccept(accept string) (al AcceptList, err error) {
+// fixme : should not rely on reqHandler
+func mockAccept(accept string) (al domain.AcceptList, err error) {
 	req := &http.Request{}
 	req.Header = make(http.Header)
 	req.Header["Accept"] = []string{accept}
-	myreq := &httpRequest{req, "", "", "", false, WAC{}}
+	myreq := reqHandler.NewRequestGetter(req) // &httpRequest{req}
 	al, err = myreq.Accept()
 	return
 }

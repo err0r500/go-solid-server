@@ -18,6 +18,8 @@ import (
 	"time"
 	"unicode"
 
+	"github.com/err0r500/go-solid-server/uc"
+
 	"github.com/err0r500/go-solid-server/constant"
 	"github.com/err0r500/go-solid-server/domain"
 )
@@ -77,12 +79,12 @@ func pkeyTypeNE(pkey interface{}) (t, n, e string) {
 }
 
 // WebIDDigestAuth performs a digest authentication using WebID-RSA
-func (s *Server) WebIDDigestAuth(req *httpRequest) (string, error) {
-	if len(req.Header.Get(constant.HAuthorization)) == 0 {
+func (s *Server) WebIDDigestAuth(req uc.SafeRequestGetter) (string, error) {
+	if len(req.Header(constant.HAuthorization)) == 0 {
 		return "", nil
 	}
 
-	authH, err := ParseDigestAuthorizationHeader(req.Header.Get(constant.HAuthorization))
+	authH, err := ParseDigestAuthorizationHeader(req.Header(constant.HAuthorization))
 	if err != nil {
 		return "", err
 	}
@@ -98,7 +100,7 @@ func (s *Server) WebIDDigestAuth(req *httpRequest) (string, error) {
 	}
 
 	if len(authH.Username) == 0 || len(claim) == 0 || len(signature) == 0 {
-		return "", errors.New("No WebID and/or claim found in the HAuthorization header.\n" + req.Header.Get(constant.HAuthorization))
+		return "", errors.New("No WebID and/or claim found in the HAuthorization header.\n" + req.Header(constant.HAuthorization))
 	}
 
 	// fetch WebID to get pubKey

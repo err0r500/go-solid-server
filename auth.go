@@ -10,6 +10,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/err0r500/go-solid-server/uc"
+
 	"github.com/err0r500/go-solid-server/constant"
 )
 
@@ -23,7 +25,7 @@ type DigestAuthorization struct {
 	Type, Source, Username, Nonce, Signature string
 }
 
-func (s *Server) authn(req *httpRequest, w http.ResponseWriter) string {
+func (s *Server) authn(req uc.RequestGetter, w http.ResponseWriter) string {
 	user, err := s.userCookie(req)
 	if err != nil {
 		//req.Server.debug.Println("userCookie error:", err)
@@ -34,7 +36,7 @@ func (s *Server) authn(req *httpRequest, w http.ResponseWriter) string {
 	}
 
 	// try WebID-RSA
-	if len(req.Header.Get(constant.HAuthorization)) > 0 {
+	if len(req.Header(constant.HAuthorization)) > 0 {
 		user, err = s.WebIDDigestAuth(req)
 		if err != nil {
 			//req.Server.debug.Println("WebID-RSA auth error:", err)
@@ -46,7 +48,7 @@ func (s *Server) authn(req *httpRequest, w http.ResponseWriter) string {
 
 	// fall back to WebID-TLS
 	if len(user) == 0 {
-		user, err = s.WebIDTLSAuth(req.TLS)
+		user, err = s.WebIDTLSAuth(req.TLS())
 		if err != nil {
 			//req.Server.debug.Println("WebID-TLS error:", err)
 		}
@@ -56,8 +58,8 @@ func (s *Server) authn(req *httpRequest, w http.ResponseWriter) string {
 	}
 
 	if len(user) > 0 {
-		if len(req.Header.Get("On-Behalf-Of")) > 0 {
-			delegator := s.uriManipulator.Debrack(req.Header.Get("On-Behalf-Of"))
+		if len(req.Header("On-Behalf-Of")) > 0 {
+			delegator := s.uriManipulator.Debrack(req.Header("On-Behalf-Of"))
 			if s.VerifyDelegator(delegator, user) {
 				//req.Server.debug.Println("Setting delegation user to:", delegator)
 				user = delegator
@@ -72,30 +74,30 @@ func (s *Server) authn(req *httpRequest, w http.ResponseWriter) string {
 	return user
 }
 
-func (s *Server) userCookie(req *httpRequest) (string, error) {
-	cookie, err := req.Cookie("Session")
+func (s *Server) userCookie(req uc.SafeRequestGetter) (string, error) {
+	cookieVal, err := req.CookieValue("Session")
 	if err != nil {
-		return "", errors.New(err.Error() + " Got: " + fmt.Sprintf("%s", req.Cookies()))
+		return "", err
 	}
 
 	value := make(map[string]string)
-	if err := s.cookieManager.Decode("Session", cookie.Value, &value); err != nil {
+	if err := s.cookieManager.Decode("Session", cookieVal, &value); err != nil {
 		return "", err
 	}
 
 	return value["user"], nil
 }
 
-func (srv *Server) userCookieSet(w http.ResponseWriter, user string) error {
+func (s *Server) userCookieSet(w http.ResponseWriter, user string) error {
 	value := map[string]string{
 		"user": user,
 	}
 
-	encoded, err := srv.cookieManager.Encode("Session", value)
+	encoded, err := s.cookieManager.Encode("Session", value)
 	if err != nil {
 		return err
 	}
-	t := time.Duration(srv.Config.CookieAge) * time.Hour
+	t := time.Duration(s.Config.CookieAge) * time.Hour
 	cookieCfg := &http.Cookie{
 		Expires: time.Now().Add(t),
 		Name:    "Session",
@@ -107,7 +109,7 @@ func (srv *Server) userCookieSet(w http.ResponseWriter, user string) error {
 	return nil
 }
 
-func (srv *Server) userCookieDelete(w http.ResponseWriter) {
+func (s *Server) userCookieDelete(w http.ResponseWriter) {
 	http.SetCookie(w, &http.Cookie{
 		Name:   "Session",
 		Value:  "deleted",
@@ -227,7 +229,7 @@ func (s *Server) ValidateSecureToken(tokenType string, token string) (map[string
 	return values, nil
 }
 
-func (s *Server) GetValuesFromToken(tokenType string, token string, req *httpRequest) (map[string]string, error) {
+func (s *Server) GetValuesFromToken(tokenType string, token string, req uc.SafeRequestGetter) (map[string]string, error) {
 	values := NewTokenValues()
 	token, err := decodeQuery(token)
 	if err != nil {
@@ -255,9 +257,8 @@ func IsTokenDateValid(valid string) error {
 	return nil
 }
 
-func (s *Server) GetAuthzFromToken(token string, req *httpRequest) (string, error) {
-	// values, err := GetValuesFromToken(constant.HAuthorization, token, req, s)
-	values, err := s.tokenStorer.GetPersistedToken(constant.HAuthorization, req.Host, token)
+func (s *Server) GetAuthzFromToken(token string, user string, req uc.SafeRequestGetter) (string, error) {
+	values, err := s.tokenStorer.GetPersistedToken(constant.HAuthorization, req.Host(), token)
 	if err != nil {
 		return "", err
 	}
@@ -265,13 +266,15 @@ func (s *Server) GetAuthzFromToken(token string, req *httpRequest) (string, erro
 		len(values["origin"]) == 0 {
 		return "", errors.New("Malformed token is missing required values")
 	}
+
 	err = IsTokenDateValid(values["valid"])
 	if err != nil {
 		return "", err
 	}
-	origin := req.Header.Get("Origin")
+
+	origin := req.Header("Origin")
 	if len(origin) > 0 && origin != values["origin"] {
-		return "", errors.New("Cannot authorize user: " + req.User + ". Origin: " + origin + " does not match the origin in the token: " + values["origin"])
+		return "", errors.New("Cannot authorize user: " + user + ". Origin: " + origin + " does not match the origin in the token: " + values["origin"])
 	}
 	return values["webid"], nil
 }

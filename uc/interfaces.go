@@ -1,6 +1,7 @@
 package uc
 
 import (
+	"crypto/tls"
 	"io"
 	"net/http"
 
@@ -48,6 +49,7 @@ type Verifier interface {
 }
 
 type FilesHandler interface {
+	SaveFiles(folder string, files map[string]io.Reader) error
 	SaveGraph(g *domain.Graph, path string, mime string) error
 	UpdateGraphFromFile(g *domain.Graph, encoder Encoder, filename string)
 	AppendFile(g *domain.Graph, filename string, baseURI string)
@@ -97,4 +99,37 @@ type Debug interface {
 
 type SparqlHandler interface {
 	SPARQLUpdate(g *domain.Graph, reader io.Reader) (int, error)
+}
+
+type RequestGetter interface {
+	SafeRequestGetter
+	RequestRawAccessor
+}
+
+type SafeRequestGetter interface {
+	Headers() map[string][]string
+	Header(string) string
+	HeaderComplete(string) []string
+	Body() io.ReadCloser
+	MultipartFormContent() (map[string]io.Reader, error)
+
+	FormValue(key string) string
+
+	IfNoneMatch(etag string) bool
+	IfMatch(etag string) bool
+	IsTLS() bool
+	Method() string
+
+	CookieValue(key string) (string, error)
+	Host() string
+	TargetsAPI() bool
+	BaseURI() string
+	URLPath() string
+	URLRawQuery() string
+	Accept() (domain.AcceptList, error)
+}
+
+type RequestRawAccessor interface {
+	Request() *http.Request
+	TLS() *tls.ConnectionState
 }

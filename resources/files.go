@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"errors"
 	"io"
+	"io/ioutil"
 	"log"
 	"os"
 
@@ -38,6 +39,10 @@ func (origFilesHandler) SaveFiles(folder string, files map[string]io.Reader) err
 	}
 
 	return nil
+}
+
+func (origFilesHandler) GetFileContent(path string) ([]byte, error) {
+	return ioutil.ReadFile(path)
 }
 
 // SaveGraph is used to dump RDF from a Graph into a file

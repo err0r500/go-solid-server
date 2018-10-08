@@ -59,6 +59,7 @@ type FilesHandler interface {
 	UpdateGraphFromFile(g *domain.Graph, encoder Encoder, filename string)
 	AppendFile(g *domain.Graph, filename string, baseURI string)
 	Exists(path string) bool
+	GetFileContent(path string) ([]byte, error)
 }
 
 type URIManipulator interface {

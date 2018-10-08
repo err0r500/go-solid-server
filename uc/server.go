@@ -1,6 +1,8 @@
 package uc
 
 import (
+	"strings"
+
 	"github.com/err0r500/go-solid-server/domain"
 )
 
@@ -8,18 +10,19 @@ import (
 type Server struct {
 	Config domain.ServerConfig
 
-	cookieManager CookieManager
-	logger        Debug
-	fileHandler   FilesHandler
-	httpCaller    HttpCaller
-	mailer        Mailer
-	pathInformer  PathInformer
-	parser        Encoder
-	//rdfHandler     encoder.RdfEncoder // fixme : remove this one
+	cookieManager  CookieManager
+	logger         Debug
+	fileHandler    FilesHandler
+	httpCaller     HttpCaller
+	mailer         Mailer
+	pathInformer   PathInformer
+	parser         Encoder
 	sparqlHandler  SparqlHandler
 	templater      Templater
 	tokenStorer    TokenStorer
 	uriManipulator URIManipulator
+	ldpcHandler    LDPCHandler
+	uuidGenerator  UUIDGenerator
 }
 
 func (s Server) handleStatusText(status int, err error) string {
@@ -57,4 +60,109 @@ type preferheader struct {
 // Preferheaders holds the list of Prefer headers
 type Preferheaders struct {
 	headers []*preferheader
+}
+
+// ParsePreferHeader parses the LDP specific Prefer header
+func ParsePreferHeader(header string) *Preferheaders {
+	ret := new(Preferheaders)
+
+	for _, v := range strings.Split(header, ",") {
+		item := new(preferheader)
+		v = strings.TrimSpace(v)
+		if strings.HasPrefix(v, "return=representation") {
+			for _, s := range strings.Split(v, ";") {
+				s = strings.TrimSpace(s)
+				if strings.HasPrefix(s, "omit") {
+					s = strings.TrimLeft(s, "omit=")
+					s = strings.TrimLeft(s, "\"")
+					s = strings.TrimRight(s, "\"")
+					for _, u := range strings.Split(s, " ") {
+						item.omit = append(item.omit, u)
+					}
+				}
+				if strings.HasPrefix(s, "include") {
+					s = strings.TrimLeft(s, "include=")
+					s = strings.TrimLeft(s, "\"")
+					s = strings.TrimRight(s, "\"")
+					for _, u := range strings.Split(s, " ") {
+						item.include = append(item.include, u)
+					}
+				}
+			}
+			ret.headers = append(ret.headers, item)
+		}
+	}
+
+	return ret
+}
+
+// Omits returns the types of resources to omit when listing an LDPC
+func (p *Preferheaders) Omits() []string {
+	var ret []string
+	for _, v := range p.headers {
+		for _, u := range v.omit {
+			ret = append(ret, u)
+		}
+	}
+	return ret
+}
+
+// Includes returns the types of resources to include when listing an LDPC
+func (p *Preferheaders) Includes() []string {
+	var ret []string
+	for _, v := range p.headers {
+		for _, u := range v.include {
+			ret = append(ret, u)
+		}
+	}
+	return ret
+}
+
+// ParseLinkHeader is a generic Link header parser
+func ParseLinkHeader(header string) *Linkheaders {
+	ret := new(Linkheaders)
+
+	for _, v := range strings.Split(header, ", ") {
+		item := new(linkheader)
+		for _, s := range strings.Split(v, ";") {
+			s = strings.TrimSpace(s)
+			if strings.HasPrefix(s, "<") && strings.HasSuffix(s, ">") {
+				s = strings.TrimLeft(s, "<")
+				s = strings.TrimRight(s, ">")
+				item.uri = s
+			} else if strings.Index(s, "rel=") >= 0 {
+				s = strings.TrimLeft(s, "rel=")
+
+				if strings.HasPrefix(s, "\"") || strings.HasPrefix(s, "'") {
+					s = s[1:]
+				}
+				if strings.HasSuffix(s, "\"") || strings.HasSuffix(s, "'") {
+					s = s[:len(s)-1]
+				}
+				item.rel = s
+			}
+		}
+		ret.headers = append(ret.headers, item)
+	}
+	return ret
+}
+
+// MatchRel attempts to match a Link header based on the rel value
+func (l *Linkheaders) MatchRel(rel string) string {
+	for _, v := range l.headers {
+		if v.rel == rel {
+			return v.uri
+		}
+	}
+	return ""
+}
+
+// MatchURI attempts to match a Link header based on the href value
+func (l *Linkheaders) MatchURI(uri string) bool {
+	for _, v := range l.headers {
+		if v.uri == uri {
+			return true
+		}
+	}
+	return false
 }

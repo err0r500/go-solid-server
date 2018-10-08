@@ -24,8 +24,7 @@ func (s *Server) Patch(req SafeRequestGetter, resource *domain.PathInfo, dataHas
 		}
 	}
 
-	etag := "" // fixme, just while waiting for interface
-	//etag, _ := NewETag(resource.File) // fixme : pass behind an interface
+	etag, _ := s.fileHandler.NewETag(resource.File)
 	if !req.IfMatch("\"" + etag + "\"") {
 		return r.respond(412, "412 - Precondition Failed")
 	}

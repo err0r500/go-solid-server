@@ -69,9 +69,8 @@ func (s *Server) authn(req uc.RequestGetter, w http.ResponseWriter) string {
 		return user
 	}
 
-	user = ""
 	//req.Server.debug.Println("Unauthenticated User")
-	return user
+	return ""
 }
 
 func (s *Server) userCookie(req uc.SafeRequestGetter) (string, error) {

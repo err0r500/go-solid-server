@@ -17,7 +17,7 @@ func (s Server) GetHead(req RequestGetter, resource *domain.PathInfo, contentTyp
 	magicType := resource.FileType
 	maybeRDF := false
 	globPath := ""
-	etag := ""
+	// etag := ""
 
 	// check for glob
 	glob := false
@@ -47,7 +47,6 @@ func (s Server) GetHead(req RequestGetter, resource *domain.PathInfo, contentTyp
 		r.HeaderSet(constant.HCType, contentType)
 		urlStr := resource.URI
 		s.logger.Debug("Redirecting to", urlStr)
-		//http.Redirect(w, req.Request(), urlStr, 301)
 		r.redirectURL = urlStr
 		return r.respond(301)
 	}
@@ -77,10 +76,10 @@ func (s Server) GetHead(req RequestGetter, resource *domain.PathInfo, contentTyp
 		r.HeaderSet("Content-Length", fmt.Sprintf("%d", resource.Size))
 	}
 
-	//etag, err = NewETag(resource.File) // fixme ldp interface
-	//if err != nil {
-	//	return r.respond(500, err)
-	//}
+	etag, err := s.fileHandler.NewETag(resource.File)
+	if err != nil {
+		return r.respond(500, err)
+	}
 	r.HeaderSet("ETag", "\""+etag+"\"")
 
 	if !req.IfMatch("\"" + etag + "\"") {
@@ -154,26 +153,26 @@ func (s Server) GetHead(req RequestGetter, resource *domain.PathInfo, contentTyp
 			} else {
 				showContainment := true
 				showEmpty := false
-				pref := Preferheaders{} //ParsePreferHeader(req.Header("Prefer")) fixme
+				pref := ParsePreferHeader(req.Header("Prefer"))
 				if len(pref.headers) > 0 {
 					r.HeaderSet("Preference-Applied", "return=representation")
 				}
-				//for _, include := range pref.Includes() { // fixme, needs interface
-				//	switch include {
-				//	case "http://www.w3.org/ns/ldp#PreferContainment":
-				//		showContainment = true
-				//	case "http://www.w3.org/ns/ldp#PreferEmptyContainer":
-				//		showEmpty = true
-				//	}
-				//}
-				//for _, omit := range pref.Omits() {
-				//	switch omit {
-				//	case "http://www.w3.org/ns/ldp#PreferContainment":
-				//		showContainment = false
-				//	case "http://www.w3.org/ns/ldp#PreferEmptyContainer":
-				//		showEmpty = false
-				//	}
-				//}
+				for _, include := range pref.Includes() {
+					switch include {
+					case "http://www.w3.org/ns/ldp#PreferContainment":
+						showContainment = true
+					case "http://www.w3.org/ns/ldp#PreferEmptyContainer":
+						showEmpty = true
+					}
+				}
+				for _, omit := range pref.Omits() {
+					switch omit {
+					case "http://www.w3.org/ns/ldp#PreferContainment":
+						showContainment = false
+					case "http://www.w3.org/ns/ldp#PreferEmptyContainer":
+						showEmpty = false
+					}
+				}
 
 				if infos, err := ioutil.ReadDir(resource.File); err == nil {
 					var _s domain.Term

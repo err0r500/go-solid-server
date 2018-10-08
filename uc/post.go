@@ -24,8 +24,7 @@ func (s Server) Post(req SafeRequestGetter, resource *domain.PathInfo, dataHasPa
 	}
 	err = nil
 
-	etag := "" //fixme (waiting for etag interface)
-	//etag, _ := NewETag(resource.File)
+	etag, _ := s.fileHandler.NewETag(resource.File)
 	if !req.IfMatch("\"" + etag + "\"") {
 		return r.respond(412, "412 - Precondition Failed")
 	}
@@ -36,13 +35,9 @@ func (s Server) Post(req SafeRequestGetter, resource *domain.PathInfo, dataHasPa
 	// LDP
 	isNew := false
 	if resource.IsDir && dataMime != constant.MultipartFormData {
-		//link := ParseLinkHeader(req.Header("Link")).MatchRel("type") // fixme ldpInterface
-		link := "" // tofix
+		link := ParseLinkHeader(req.Header("Link")).MatchRel("type")
 		slug := req.Header("Slug")
-
-		//uuid := NewUUID() // fixme UUIDgen interface
-		//uuid = uuid[:6]
-		uuid := ""
+		uuid := s.uuidGenerator.UUID()
 
 		if !strings.HasSuffix(resource.Path, "/") {
 			resource.Path += "/"

@@ -60,6 +60,8 @@ type FilesHandler interface {
 	AppendFile(g *domain.Graph, filename string, baseURI string)
 	Exists(path string) bool
 	GetFileContent(path string) ([]byte, error)
+
+	NewETag(path string) (string, error)
 }
 
 type URIManipulator interface {
@@ -138,4 +140,13 @@ type SafeRequestGetter interface {
 type RequestRawAccessor interface {
 	Request() *http.Request
 	TLS() *tls.ConnectionState
+}
+
+type LDPCHandler interface {
+	ParsePreferHeader(header string) *Preferheaders
+	ParseLinkHeader(header string) *Linkheaders
+}
+
+type UUIDGenerator interface {
+	UUID() string
 }

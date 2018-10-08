@@ -1,17 +1,16 @@
 package gold
 
 import (
-	"bufio"
 	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
+	"log"
 	"net/http"
 	"net/url"
 	"os"
-	_path "path"
 	"path/filepath"
 	"strings"
 
@@ -370,38 +369,22 @@ func (s Server) GetHead(w http.ResponseWriter, req uc.RequestGetter, resource *d
 								if !showEmpty {
 									g.AddTriple(_s, domain.NewResource("http://www.w3.org/1999/02/22-rdf-syntax-ns#type"), domain.NewResource("http://www.w3.org/ns/ldp#Resource"))
 									// add type if RDF resource
-									//infoUrl, _ := url.Parse(info.Name())
-									guessType := f.FileType
 
-									if guessType == constant.TextPlain {
-										// open file and attempt to read the first line
-										// Open an input file, exit on error.
-										fd, err := os.Open(f.File)
+									if f.FileType == constant.TextPlain {
+										firstLine, err := s.fileHandler.FileFirstLine(f.File)
 										if err != nil {
-											s.logger.Debug("GET find mime type error:" + err.Error())
+											s.logger.Debug("scan error :" + err.Error())
 										}
-										defer fd.Close()
-
-										scanner := bufio.NewScanner(fd)
-
-										// stop after the first line
-										for scanner.Scan() {
-											if strings.HasPrefix(scanner.Text(), "@prefix") || strings.HasPrefix(scanner.Text(), "@base") {
-												kb := domain.NewGraph(f.URI)
-												s.fileHandler.UpdateGraphFromFile(kb, s.parser, f.File)
-												if kb.NotEmpty() {
-													for _, st := range kb.All(domain.NewResource(f.URI), domain.NewResource("http://www.w3.org/1999/02/22-rdf-syntax-ns#type"), nil) {
-														if st != nil && st.Object != nil {
-															g.AddTriple(_s, domain.NewResource("http://www.w3.org/1999/02/22-rdf-syntax-ns#type"), st.Object)
-														}
+										if strings.HasPrefix(firstLine, "@prefix") || strings.HasPrefix(firstLine, "@base") {
+											kb := domain.NewGraph(f.URI)
+											s.fileHandler.UpdateGraphFromFile(kb, s.parser, f.File)
+											if kb.NotEmpty() {
+												for _, st := range kb.All(domain.NewResource(f.URI), domain.NewResource("http://www.w3.org/1999/02/22-rdf-syntax-ns#type"), nil) {
+													if st != nil && st.Object != nil {
+														g.AddTriple(_s, domain.NewResource("http://www.w3.org/1999/02/22-rdf-syntax-ns#type"), st.Object)
 													}
 												}
 											}
-											break
-										}
-										// log potential errors
-										if err := scanner.Err(); err != nil {
-											s.logger.Debug("GET scan err: " + scanner.Err().Error())
 										}
 									}
 								}
@@ -466,20 +449,21 @@ func (s Server) GetHead(w http.ResponseWriter, req uc.RequestGetter, resource *d
 
 	if !maybeRDF && len(magicType) > 0 {
 		w.Header().Set(constant.HCType, magicType)
-
-		if status == 200 {
-			f, err := os.Open(resource.File)
-			if err == nil {
-				defer func() {
-					if err := f.Close(); err != nil {
-						s.logger.Debug("GET f.Close err:" + err.Error())
-					}
-				}()
-				io.Copy(w, f)
-			}
-		} else {
+		if status != 200 {
 			w.WriteHeader(status)
+			return r
 		}
+
+		f, err := os.Open(resource.File)
+		if err == nil {
+			defer func() {
+				if err := f.Close(); err != nil {
+					s.logger.Debug("GET f.Close err:" + err.Error())
+				}
+			}()
+			io.Copy(w, f)
+		}
+
 		return r
 	}
 
@@ -605,10 +589,7 @@ func (s Server) Post(w http.ResponseWriter, req uc.SafeRequestGetter, resource *
 			if strings.HasSuffix(slug, "/") {
 				slug = strings.TrimRight(slug, "/")
 			}
-			st, err := os.Stat(resource.File + slug)
-			//@@TODO append a random string
-
-			if st != nil && !os.IsNotExist(err) {
+			if s.fileHandler.Exists(resource.File + slug) {
 				slug += "-" + uuid
 			}
 		} else {
@@ -631,27 +612,10 @@ func (s Server) Post(w http.ResponseWriter, req uc.SafeRequestGetter, resource *
 			w.Header().Add("Link", s.uriManipulator.Brack("http://www.w3.org/ns/ldp#Resource")+"; rel=\"type\"")
 			w.Header().Add("Link", s.uriManipulator.Brack("http://www.w3.org/ns/ldp#BasicContainer")+"; rel=\"type\"")
 
-			err = os.MkdirAll(resource.File, 0755)
-			if err != nil {
-				s.logger.Debug("POST LDPC os.MkdirAll err: " + err.Error())
+			if err := s.fileHandler.SaveFiles(resource.File, map[string]io.Reader{resource.MetaFile: req.Body()}); err != nil {
 				return r.respond(500, err)
 			}
 			s.logger.Debug("Created dir " + resource.File)
-
-			buf := new(bytes.Buffer)
-			buf.ReadFrom(req.Body())
-			if buf.Len() > 0 {
-				f, err := os.OpenFile(resource.MetaFile, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0644)
-				if err != nil {
-					s.logger.Debug("POST LDPC os.OpenFile err: " + err.Error())
-					return r.respond(500, err)
-				}
-				defer f.Close()
-				_, err = io.Copy(f, buf)
-				if err != nil {
-					s.logger.Debug("POST io.Copy err: " + err.Error())
-				}
-			}
 
 			w.Header().Set("Location", resource.URI)
 			onUpdateURI(resource.URI)
@@ -713,7 +677,7 @@ func (s Server) Post(w http.ResponseWriter, req uc.SafeRequestGetter, resource *
 				s.parser.Parse(g, req.Body(), dataMime)
 			}
 
-			if err := s.fileHandler.Create(resource.File); err != nil {
+			if err := s.fileHandler.CreateFileOrDir(resource.File); err != nil {
 				return r.respond(500, err.Error())
 			}
 
@@ -726,15 +690,8 @@ func (s Server) Post(w http.ResponseWriter, req uc.SafeRequestGetter, resource *
 				}
 			}
 		} else {
-			f, err := os.OpenFile(resource.File, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0644)
-			if err != nil {
-				s.logger.Debug("POST os.OpenFile err: " + err.Error())
-				return r.respond(500, err.Error())
-			}
-			defer f.Close()
-			_, err = io.Copy(f, req.Body())
-			if err != nil {
-				s.logger.Debug("POST os.OpenFile err: " + err.Error())
+			log.Println("==>>")
+			if err := s.fileHandler.SaveFiles(resource.File, map[string]io.Reader{resource.File: req.Body()}); err != nil {
 				return r.respond(500, err.Error())
 			}
 		}
@@ -768,10 +725,7 @@ func (s Server) Put(w http.ResponseWriter, req uc.RequestGetter, resource *domai
 	}
 
 	etag, _ := NewETag(resource.File)
-	if !req.IfMatch("\"" + etag + "\"") {
-		return r.respond(412, "412 - Precondition Failed")
-	}
-	if !req.IfNoneMatch("\"" + etag + "\"") {
+	if !req.IfMatch("\""+etag+"\"") || !req.IfNoneMatch("\""+etag+"\"") {
 		return r.respond(412, "412 - Precondition Failed")
 	}
 
@@ -781,47 +735,31 @@ func (s Server) Put(w http.ResponseWriter, req uc.RequestGetter, resource *domai
 	}
 
 	// LDP PUT should be merged with LDP POST into a common LDP "method" switch
-	link := ParseLinkHeader(req.Header("Link")).MatchRel("type")
-	if len(link) > 0 && link == "http://www.w3.org/ns/ldp#BasicContainer" {
-		err := os.MkdirAll(resource.File, 0755)
-		if err != nil {
-			s.logger.Debug("PUT MkdirAll err: " + err.Error())
+	if ParseLinkHeader(req.Header("Link")).MatchRel("type") == "http://www.w3.org/ns/ldp#BasicContainer" {
+		if err := s.fileHandler.CreateFileOrDir(resource.File); err != nil {
 			return r.respond(500, err)
 		}
+
 		// refresh resource and set the right headers
-		resource, err = s.pathInformer.GetPathInfo(resource.URI)
-		w.Header().Set("Link", s.uriManipulator.Brack(resource.MetaURI)+"; rel=\"meta\", "+s.uriManipulator.Brack(resource.AclURI)+"; rel=\"acl\"")
+		newResource, err := s.pathInformer.GetPathInfo(resource.URI)
+		if err != nil {
+			return r.respond(500, err)
+		}
+		w.Header().Set("Link", s.uriManipulator.Brack(newResource.MetaURI)+"; rel=\"meta\", "+s.uriManipulator.Brack(newResource.AclURI)+"; rel=\"acl\"")
 		// LDP header
 		w.Header().Add("Link", s.uriManipulator.Brack("http://www.w3.org/ns/ldp#Resource")+"; rel=\"type\"")
 
-		onUpdateURI(resource.URI)
-		onUpdateURI(resource.ParentURI)
+		onUpdateURI(newResource.URI)
+		onUpdateURI(newResource.ParentURI)
 		return r.respond(201)
 	}
 
-	err = os.MkdirAll(_path.Dir(resource.File), 0755)
-	if err != nil {
-		s.logger.Debug("PUT MkdirAll err: " + err.Error())
-		return r.respond(500, err)
+	if resource.IsDir {
+		w.Header().Add("Link", s.uriManipulator.Brack(resource.URI)+"; rel=\"describedby\"")
+		return r.respond(406, "406 - Cannot use PUT on a directory.")
 	}
 
-	f, err := os.OpenFile(resource.File, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0644)
-	if err != nil {
-		s.logger.Debug("PUT os.OpenFile err: " + err.Error())
-		if resource.IsDir {
-			w.Header().Add("Link", s.uriManipulator.Brack(resource.URI)+"; rel=\"describedby\"")
-			return r.respond(406, "406 - Cannot use PUT on a directory.")
-		}
-		return r.respond(500, err)
-	}
-	defer f.Close()
-
-	_, err = io.Copy(f, req.Body())
-	if err != nil {
-		s.logger.Debug("PUT io.Copy err: " + err.Error())
-	}
-
-	if err != nil {
+	if err := s.fileHandler.CreateOrUpdateFile(resource.File, req.Body()); err != nil {
 		return r.respond(500, err)
 	}
 
@@ -847,24 +785,21 @@ func (s Server) Delete(w http.ResponseWriter, req uc.SafeRequestGetter, resource
 		return r.respond(500, "500 - Cannot DELETE root (/)")
 	}
 
+	if !s.fileHandler.Exists(resource.File) {
+		return r.respond(404, s.templater.NotFound())
+	}
+
 	// remove ACL and meta files first
 	if resource.File != resource.AclFile {
-		_ = os.Remove(resource.AclFile)
+		s.fileHandler.Delete(resource.AclFile)
 	}
 	if resource.File != resource.MetaFile {
-		_ = os.Remove(resource.MetaFile)
+		s.fileHandler.Delete(resource.MetaFile)
 	}
-	err = os.Remove(resource.File)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return r.respond(404, s.templater.NotFound())
-		}
+	if err := s.fileHandler.Delete(resource.File); err != nil {
 		return r.respond(500, err)
 	}
-	_, err = os.Stat(resource.File)
-	if err == nil {
-		return r.respond(409, err)
-	}
+
 	onDeleteURI(resource.URI)
 	onUpdateURI(resource.ParentURI)
 	return r
@@ -878,20 +813,10 @@ func (s Server) MkCol(w http.ResponseWriter, req uc.SafeRequestGetter, resource 
 		return r.respond(aclWrite, s.handleStatusText(aclWrite, err))
 	}
 
-	err = os.MkdirAll(resource.File, 0755)
-	if err != nil {
-		switch err.(type) {
-		case *os.PathError:
-			return r.respond(409, err)
-		default:
-			return r.respond(500, err)
-		}
-	} else {
-		_, err := os.Stat(resource.File)
-		if err != nil {
-			return r.respond(409, err)
-		}
+	if err := s.fileHandler.CreateFileOrDir(resource.File); err != nil {
+		return r.respond(409, err)
 	}
+
 	onUpdateURI(resource.URI)
 	onUpdateURI(resource.ParentURI)
 	return r.respond(201)

@@ -1,6 +1,8 @@
 package resources
 
 import (
+	"bufio"
+	"errors"
 	"io"
 	"log"
 	"os"
@@ -74,6 +76,21 @@ func (origFilesHandler) SaveGraph(g *domain.Graph, path string, mime string) err
 	//serializer.AddN(ch)
 	return nil
 }
+func (h origFilesHandler) Read(path string) (io.Reader, error) { return os.Open(path) }
+func (h origFilesHandler) FileFirstLine(path string) (string, error) {
+	fd, err := h.Read(path)
+	if err != nil {
+		return "", err
+	}
+	scanner := bufio.NewScanner(fd)
+
+	// returns directly at the first line
+	for scanner.Scan() {
+		return scanner.Text(), nil
+	}
+
+	return "", errors.New("nothing to read in file : " + path)
+}
 
 // AppendFile is used to append RDF from a file, using a base URI
 func (h origFilesHandler) AppendFile(g *domain.Graph, filename string, baseURI string) {
@@ -94,7 +111,20 @@ func (h origFilesHandler) AppendFile(g *domain.Graph, filename string, baseURI s
 	h.rdfHandler.ParseBase(g, f, constant.TextTurtle, baseURI)
 }
 
-func (origFilesHandler) Create(path string) error {
+func (origFilesHandler) Delete(path string) error {
+	return os.Remove(path)
+}
+
+func (origFilesHandler) CreateFileOrDir(path string) error {
+	err := createFolderIfNeeded(path)
+	if err != nil {
+		return err
+	}
+
+	if fileInfo, _ := os.Stat(path); fileInfo != nil && fileInfo.IsDir() { // if a directory was asked, stop here
+		return nil
+	}
+
 	f, err := os.OpenFile(path, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0644)
 	if err != nil {
 		return err
@@ -104,10 +134,25 @@ func (origFilesHandler) Create(path string) error {
 	return nil
 }
 
+func (origFilesHandler) CreateOrUpdateFile(path string, reader io.Reader) error {
+	if err := os.MkdirAll(_path.Dir(path), 0755); err != nil {
+		return err
+	}
+
+	f, err := os.OpenFile(path, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0644)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	if _, err = io.Copy(f, reader); err != nil {
+		return err
+	}
+	return nil
+}
+
 // UpdateGraphFromFile is used to read RDF data from a file into the graph
 func (origFilesHandler) UpdateGraphFromFile(g *domain.Graph, parser uc.Encoder, filename string) {
-	log.Println(g.Len())
-
 	stat, err := os.Stat(filename)
 	if os.IsNotExist(err) {
 		return
@@ -128,8 +173,8 @@ func (origFilesHandler) UpdateGraphFromFile(g *domain.Graph, parser uc.Encoder, 
 }
 
 func (origFilesHandler) Exists(path string) bool {
-	_, err := os.Stat(path)
-	return err == nil
+	st, err := os.Stat(path)
+	return st != nil && !os.IsNotExist(err)
 }
 
 func createFolderIfNeeded(path string) error {

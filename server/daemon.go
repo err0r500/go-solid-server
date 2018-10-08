@@ -8,11 +8,9 @@ import (
 	"net/http"
 	"net/http/fcgi"
 	"os"
-	"strconv"
 	"strings"
 
 	gold "github.com/err0r500/go-solid-server"
-	"github.com/err0r500/go-solid-server/domain"
 )
 
 var (
@@ -74,6 +72,7 @@ func redir(w http.ResponseWriter, req *http.Request) {
 	http.Redirect(w, req, next+req.RequestURI, http.StatusMovedPermanently)
 }
 
+// fixme change this part too :
 func main() {
 	// Try to recover in case of panics
 	defer func() {
@@ -102,51 +101,52 @@ func main() {
 	}
 
 	config := gold.NewServerConfig()
-	confLoaded := false
+	//confLoaded := false
 	if len(*conf) > 0 {
+		log.Println("attempt to load JSON")
 		config, err = gold.ConfigLoader{}.LoadJSONFile(*conf)
 		if err == nil {
-			confLoaded = true
+			//confLoaded = true
 		} else {
 			log.Println(err)
 		}
 	}
-	if !confLoaded {
-		config.ListenHTTP = *httpA
-		config.ListenHTTPS = *httpsA
-		config.TLSCert = *tlsCert
-		config.TLSKey = *tlsKey
-		config.WebIDTLS = *enableWebIDTLS
-		config.Salt = *salt
-		config.CookieAge = *cookieT
-		config.TokenAge = *tokenT
-		config.Debug = *debug
-		config.DataRoot = serverRoot
-		config.BoltPath = *bolt
-		config.Vhosts = *vhosts
-		config.Insecure = *insecure
-		config.NoHTTP = *nohttp
-		config.HSTS = *hsts
-		config.MetaSuffix = *metaSuffix
-		config.ACLSuffix = *aclSuffix
-		config.Agent = *agent
-		config.ProxyTemplate = *proxy
-		config.ProxyLocal = *local
-		if len(*emailName) > 0 && len(*emailAddr) > 0 && len(*emailUser) > 0 &&
-			len(*emailPass) > 0 && len(*emailServ) > 0 && len(*emailPort) > 0 {
-			ep, _ := strconv.Atoi(*emailPort)
-			config.SMTPConfig = domain.EmailConfig{
-				Name:     *emailName,
-				Addr:     *emailAddr,
-				User:     *emailUser,
-				Pass:     *emailPass,
-				Host:     *emailServ,
-				Port:     ep,
-				ForceSSL: *emailForceSSL,
-				Insecure: *emailInsecure,
-			}
-		}
-	}
+	//if !confLoaded {
+	//	config.ListenHTTP = *httpA
+	//	config.ListenHTTPS = *httpsA
+	//	config.TLSCert = *tlsCert
+	//	config.TLSKey = *tlsKey
+	//	config.WebIDTLS = *enableWebIDTLS
+	//	config.Salt = *salt
+	//	config.CookieAge = *cookieT
+	//	config.TokenAge = *tokenT
+	//	config.Debug = *debug
+	//	config.DataRoot = serverRoot
+	//	config.BoltPath = *bolt
+	//	config.Vhosts = *vhosts
+	//	config.Insecure = *insecure
+	//	config.NoHTTP = *nohttp
+	//	config.HSTS = *hsts
+	//	config.MetaSuffix = *metaSuffix
+	//	config.ACLSuffix = *aclSuffix
+	//	config.Agent = *agent
+	//	config.ProxyTemplate = *proxy
+	//	config.ProxyLocal = *local
+	//	if len(*emailName) > 0 && len(*emailAddr) > 0 && len(*emailUser) > 0 &&
+	//		len(*emailPass) > 0 && len(*emailServ) > 0 && len(*emailPort) > 0 {
+	//		ep, _ := strconv.Atoi(*emailPort)
+	//		config.SMTPConfig = domain.EmailConfig{
+	//			Name:     *emailName,
+	//			Addr:     *emailAddr,
+	//			User:     *emailUser,
+	//			Pass:     *emailPass,
+	//			Host:     *emailServ,
+	//			Port:     ep,
+	//			ForceSSL: *emailForceSSL,
+	//			Insecure: *emailInsecure,
+	//		}
+	//	}
+	//}
 	_, httpsPort, _ = net.SplitHostPort(config.ListenHTTPS)
 
 	handler := gold.NewServer(*config)

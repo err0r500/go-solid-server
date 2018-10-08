@@ -27,6 +27,7 @@ func (c secureCookiesHandler) Decode(name, value string, dst interface{}) error 
 	return c.cookie.Decode(name, value, dst)
 }
 
+// todo : is that normal, check this :
 func (c secureCookiesHandler) Check(token string) error {
 	if token == string(c.salt) {
 		return nil

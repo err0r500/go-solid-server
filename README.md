@@ -14,6 +14,15 @@ Written in Go, based on
 
 [![Build Status](https://travis-ci.org/err0r500/go-solid-server.svg?branch=master)](https://travis-ci.org/err0r500/go-solid-server)
 
+## TESTING :
+from inside the repository
+```bash
+go run server/*.go
+```
+a bolt.db will be created at /tmp/bolt.db
+then open [http://localhost:8080](http://localhost:8080)
+you're navigating your file system in ./testRootFolder
+
 ## Installing
 
 ### From docker repository:

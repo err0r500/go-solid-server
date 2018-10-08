@@ -67,21 +67,25 @@ func NewServer(config domain.ServerConfig) *Server {
 
 // NewServerConfig creates a new config object
 func NewServerConfig() *domain.ServerConfig {
+	log.Println("load config")
 	return &domain.ServerConfig{
-		CookieAge:  8736, // hours (1 year)
-		TokenAge:   5,
-		HSTS:       true,
-		WebIDTLS:   true,
-		MetaSuffix: ".meta",
-		ACLSuffix:  ".acl",
-		DataApp:    "tabulator",
-		DirIndex:   []string{"index.html", "index.htm"},
-		DirApp:     "http://linkeddata.github.io/warp/#list/",
-		SignUpApp:  "https://solid.github.io/solid-signup/?domain=",
-		DiskLimit:  100000000, // 100MB
-		DataRoot:   serverDefaultRoot(),
-		BoltPath:   filepath.Join(os.TempDir(), "bolt.db"),
-		ProxyLocal: true,
+		ListenHTTP:  ":8080",
+		ListenHTTPS: ":8443",
+		Debug:       true,
+		CookieAge:   8736, // hours (1 year)
+		TokenAge:    5,
+		HSTS:        false,
+		WebIDTLS:    true,
+		MetaSuffix:  ".meta",
+		ACLSuffix:   ".acl",
+		DataApp:     "tabulator",
+		DirIndex:    []string{"index.html", "index.htm"},
+		DirApp:      "http://linkeddata.github.io/warp/#list/",
+		SignUpApp:   "https://solid.github.io/solid-signup/?domain=",
+		DiskLimit:   100000000, // 100MB
+		DataRoot:    serverDefaultRoot(),
+		BoltPath:    filepath.Join(os.TempDir(), "bolt.db"),
+		ProxyLocal:  true,
 	}
 }
 
@@ -110,5 +114,7 @@ func serverDefaultRoot() string {
 	if !strings.HasSuffix(serverRoot, "/") {
 		serverRoot += "/"
 	}
-	return serverRoot
+
+	// todo : hard coded for development, return just serverRoot when everything is fine
+	return serverRoot + "_testRootFolder/"
 }

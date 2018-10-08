@@ -1,7 +1,9 @@
 # gold
 
 [![BCH compliance](https://bettercodehub.com/edge/badge/err0r500/go-solid-server?branch=master)](https://bettercodehub.com/)
-<- hopefully, this can easily be improved ! :)
+[![Maintainability](https://api.codeclimate.com/v1/badges/afce4e93ee7afc1301c5/maintainability)](https://codeclimate.com/github/err0r500/go-solid-server/maintainability)
+[![codebeat badge](https://codebeat.co/badges/45c6239d-12e0-46cf-a999-90eff7072327)](https://codebeat.co/projects/github-com-err0r500-go-solid-server-master)
+
 
 [![](https://img.shields.io/badge/project-Solid-7C4DFF.svg?style=flat-square)](https://github.com/solid/solid)
 [![Join the chat at https://gitter.im/linkeddata/gold](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/linkeddata/gold?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)

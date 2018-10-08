@@ -7,7 +7,7 @@ import (
 	"github.com/err0r500/go-solid-server/domain"
 )
 
-func (s *Server) Options(req SafeRequestGetter, resource *domain.PathInfo) *response {
+func (s Interactor) Options(req SafeRequestGetter, resource *domain.PathInfo) *response {
 	r := NewResponse()
 	// TODO: WAC
 	corsReqH := req.HeaderComplete("Access-Control-Request-Headers") // CORS preflight only

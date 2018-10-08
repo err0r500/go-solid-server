@@ -11,7 +11,7 @@ import (
 	"github.com/err0r500/go-solid-server/domain"
 )
 
-func (s *Server) Patch(req SafeRequestGetter, resource *domain.PathInfo, dataHasParser bool, dataMime string, acl WAC) (r *response) {
+func (s Interactor) Patch(req SafeRequestGetter, resource *domain.PathInfo, dataHasParser bool, dataMime string, acl WAC) (r *response) {
 	r = &response{}
 
 	// check append first
@@ -82,7 +82,7 @@ type jsonPatch map[string]map[string][]struct {
 }
 
 // JSONPatch is used to perform a PATCH operation on a Graph using data from the reader
-func (Server) JSONPatch(g *domain.Graph, r io.Reader) error {
+func (Interactor) JSONPatch(g *domain.Graph, r io.Reader) error {
 	v := make(jsonPatch)
 	data, err := ioutil.ReadAll(r)
 	if err != nil {

@@ -4,7 +4,7 @@ import (
 	"github.com/err0r500/go-solid-server/domain"
 )
 
-func (s Server) MkCol(req SafeRequestGetter, resource *domain.PathInfo, acl WAC) *response {
+func (s Interactor) MkCol(req SafeRequestGetter, resource *domain.PathInfo, acl WAC) *response {
 	r := NewResponse()
 
 	aclWrite, err := s.AllowWrite(acl, req.Header("Origin"), resource.URI)

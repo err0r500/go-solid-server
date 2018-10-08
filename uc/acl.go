@@ -26,26 +26,26 @@ const (
 )
 
 // AllowRead checks if Read access is allowed
-func (s *Server) AllowRead(acl WAC, origin, path string) (int, error) {
+func (s Interactor) AllowRead(acl WAC, origin, path string) (int, error) {
 	return s.allow(acl, origin, readAccess, path)
 }
 
 // AllowWrite checks if Write access is allowed
-func (s *Server) AllowWrite(acl WAC, origin, path string) (int, error) {
+func (s Interactor) AllowWrite(acl WAC, origin, path string) (int, error) {
 	return s.allow(acl, origin, writeAccess, path)
 }
 
 // AllowAppend checks if Append access is allowed
-func (s *Server) AllowAppend(acl WAC, origin, path string) (int, error) {
+func (s Interactor) AllowAppend(acl WAC, origin, path string) (int, error) {
 	return s.allow(acl, origin, appendAccess, path)
 }
 
 // AllowControl checks if Control access is allowed
-func (s *Server) AllowControl(acl WAC, origin, path string) (int, error) {
+func (s Interactor) AllowControl(acl WAC, origin, path string) (int, error) {
 	return s.allow(acl, origin, controlAccess, path)
 }
 
-func (s *Server) VerifyDelegator(delegator string, delegatee string) bool {
+func (s Interactor) VerifyDelegator(delegator string, delegatee string) bool {
 	g := domain.NewGraph(delegator)
 
 	if err := s.httpCaller.LoadURI(g, delegator); err != nil {
@@ -61,7 +61,7 @@ func (s *Server) VerifyDelegator(delegator string, delegatee string) bool {
 }
 
 // Return an HTTP code and error (200 if authd, 401 if auth required, 403 if not authorized, 500 if error)
-func (s *Server) allow(acl WAC, origin string, mode string, path string) (int, error) {
+func (s Interactor) allow(acl WAC, origin string, mode string, path string) (int, error) {
 	accessType := "accessTo"
 	p, err := s.pathInformer.GetPathInfo(path)
 	if err != nil {

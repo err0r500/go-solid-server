@@ -12,7 +12,7 @@ import (
 	"github.com/err0r500/go-solid-server/mime"
 )
 
-func (s Server) GetHead(req RequestGetter, resource *domain.PathInfo, contentType string, acl WAC) *response {
+func (s Interactor) GetHead(req RequestGetter, resource *domain.PathInfo, contentType string, acl WAC) *response {
 	r := NewResponse()
 	magicType := resource.FileType
 	maybeRDF := false

@@ -250,7 +250,7 @@ func IsTokenDateValid(valid string) error {
 	}
 
 	if time.Now().Local().Unix() > v {
-		return errors.New("Token has expired!")
+		return errors.New("token has expired")
 	}
 
 	return nil
@@ -279,9 +279,7 @@ func (s *Server) GetAuthzFromToken(token string, user string, req uc.SafeRequest
 }
 
 func saltedPassword(salt, pass string) string {
-	s := sha256.Sum256([]byte(salt + pass))
-	toString := fmt.Sprintf("%x", s)
-	return toString
+	return fmt.Sprintf("%x", sha256.Sum256([]byte(salt+pass)))
 }
 
 func encodeQuery(s string) string {

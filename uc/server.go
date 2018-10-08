@@ -6,8 +6,17 @@ import (
 	"github.com/err0r500/go-solid-server/domain"
 )
 
-// Server object contains http handler, root where the data is found and whether it uses vhosts or not
-type Server struct {
+type LogicHandler interface {
+	Delete(req SafeRequestGetter, resource *domain.PathInfo, acl WAC) *response
+	GetHead(req RequestGetter, resource *domain.PathInfo, contentType string, acl WAC) *response
+	MkCol(req SafeRequestGetter, resource *domain.PathInfo, acl WAC) *response
+	Options(req SafeRequestGetter, resource *domain.PathInfo) *response
+	Patch(req SafeRequestGetter, resource *domain.PathInfo, dataHasParser bool, dataMime string, acl WAC) *response
+	Post(req SafeRequestGetter, resource *domain.PathInfo, dataHasParser bool, dataMime string, acl WAC) *response
+}
+
+// Interactor object contains http handler, root where the data is found and whether it uses vhosts or not
+type Interactor struct {
 	Config domain.ServerConfig
 
 	cookieManager  CookieManager
@@ -25,7 +34,7 @@ type Server struct {
 	uuidGenerator  UUIDGenerator
 }
 
-func (s Server) handleStatusText(status int, err error) string {
+func (s Interactor) handleStatusText(status int, err error) string {
 	switch status {
 	case 200:
 		return "HTTP 200 - OK"
@@ -37,7 +46,7 @@ func (s Server) handleStatusText(status int, err error) string {
 		return "HTTP 404 - Not found\n\n" + err.Error()
 	case 500:
 		return "HTTP 500 - Internal Server Error\n\n" + err.Error()
-	default: // 501
+	default:
 		return "HTTP 501 - Not implemented\n\n" + err.Error()
 	}
 }
@@ -76,17 +85,13 @@ func ParsePreferHeader(header string) *Preferheaders {
 					s = strings.TrimLeft(s, "omit=")
 					s = strings.TrimLeft(s, "\"")
 					s = strings.TrimRight(s, "\"")
-					for _, u := range strings.Split(s, " ") {
-						item.omit = append(item.omit, u)
-					}
+					item.omit = append(item.omit, strings.Split(s, " ")...)
 				}
 				if strings.HasPrefix(s, "include") {
 					s = strings.TrimLeft(s, "include=")
 					s = strings.TrimLeft(s, "\"")
 					s = strings.TrimRight(s, "\"")
-					for _, u := range strings.Split(s, " ") {
-						item.include = append(item.include, u)
-					}
+					item.include = append(item.include, strings.Split(s, " ")...)
 				}
 			}
 			ret.headers = append(ret.headers, item)
@@ -100,9 +105,7 @@ func ParsePreferHeader(header string) *Preferheaders {
 func (p *Preferheaders) Omits() []string {
 	var ret []string
 	for _, v := range p.headers {
-		for _, u := range v.omit {
-			ret = append(ret, u)
-		}
+		ret = append(ret, v.omit...)
 	}
 	return ret
 }
@@ -111,9 +114,7 @@ func (p *Preferheaders) Omits() []string {
 func (p *Preferheaders) Includes() []string {
 	var ret []string
 	for _, v := range p.headers {
-		for _, u := range v.include {
-			ret = append(ret, u)
-		}
+		ret = append(ret, v.include...)
 	}
 	return ret
 }
@@ -130,7 +131,7 @@ func ParseLinkHeader(header string) *Linkheaders {
 				s = strings.TrimLeft(s, "<")
 				s = strings.TrimRight(s, ">")
 				item.uri = s
-			} else if strings.Index(s, "rel=") >= 0 {
+			} else if strings.Contains(s, "rel=") {
 				s = strings.TrimLeft(s, "rel=")
 
 				if strings.HasPrefix(s, "\"") || strings.HasPrefix(s, "'") {

@@ -10,7 +10,7 @@ import (
 	"github.com/err0r500/go-solid-server/domain"
 )
 
-func (s Server) Post(req SafeRequestGetter, resource *domain.PathInfo, dataHasParser bool, dataMime string, acl WAC) *response {
+func (s Interactor) Post(req SafeRequestGetter, resource *domain.PathInfo, dataHasParser bool, dataMime string, acl WAC) *response {
 	r := NewResponse()
 
 	// check append first

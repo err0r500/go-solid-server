@@ -10,7 +10,7 @@ import (
 	"github.com/err0r500/go-solid-server/domain"
 )
 
-func (s Interactor) Post(req SafeRequestGetter, resource *domain.PathInfo, dataHasParser bool, dataMime string, acl WAC) *response {
+func (s Interactor) Post(req SafeRequestGetter, resource *domain.PathInfo, dataHasParser bool, dataMime string, acl WAC) *Response {
 	r := NewResponse()
 
 	// check append first
@@ -19,17 +19,17 @@ func (s Interactor) Post(req SafeRequestGetter, resource *domain.PathInfo, dataH
 		// check if we can write then
 		aclWrite, err := s.AllowWrite(acl, req.Header("Origin"), resource.URI)
 		if aclWrite > 200 || err != nil {
-			return r.respond(aclWrite, s.handleStatusText(aclWrite, err))
+			return r.Respond(aclWrite, s.handleStatusText(aclWrite, err))
 		}
 	}
 	err = nil
 
 	etag, _ := s.fileHandler.NewETag(resource.File)
 	if !req.IfMatch("\"" + etag + "\"") {
-		return r.respond(412, "412 - Precondition Failed")
+		return r.Respond(412, "412 - Precondition Failed")
 	}
 	if !req.IfNoneMatch("\"" + etag + "\"") {
-		return r.respond(412, "412 - Precondition Failed")
+		return r.Respond(412, "412 - Precondition Failed")
 	}
 
 	// LDP
@@ -65,7 +65,7 @@ func (s Interactor) Post(req SafeRequestGetter, resource *domain.PathInfo, dataH
 			resource, err = s.pathInformer.GetPathInfo(resource.Base + "/" + resource.Path)
 			if err != nil {
 				s.logger.Debug("POST LDPC req.pathInfo err: " + err.Error())
-				return r.respond(500, err)
+				return r.Respond(500, err)
 			}
 
 			r.HeaderSet("Location", resource.URI)
@@ -74,20 +74,20 @@ func (s Interactor) Post(req SafeRequestGetter, resource *domain.PathInfo, dataH
 			r.HeaderAdd("Link", s.uriManipulator.Brack("http://www.w3.org/ns/ldp#BasicContainer")+"; rel=\"type\"")
 
 			if err := s.fileHandler.SaveFiles(resource.File, map[string]io.Reader{resource.MetaFile: req.Body()}); err != nil {
-				return r.respond(500, err)
+				return r.Respond(500, err)
 			}
 			s.logger.Debug("Created dir " + resource.File)
 
 			r.HeaderSet("Location", resource.URI)
 			//onUpdateURI(resource.URI) // fixme, needs websocketInterface
 			//onUpdateURI(resource.ParentURI)
-			return r.respond(201)
+			return r.Respond(201)
 		}
 
 		resource, err = s.pathInformer.GetPathInfo(resource.Base + "/" + resource.Path)
 		if err != nil {
 			s.logger.Debug("POST LDPR req.pathInfo err: " + err.Error())
-			return r.respond(500, err)
+			return r.Respond(500, err)
 		}
 		r.HeaderSet("Location", resource.URI)
 		r.HeaderSet("Link", s.uriManipulator.Brack(resource.MetaURI)+"; rel=\"meta\", "+s.uriManipulator.Brack(resource.AclURI)+"; rel=\"acl\"")
@@ -99,7 +99,7 @@ func (s Interactor) Post(req SafeRequestGetter, resource *domain.PathInfo, dataH
 	if dataMime == constant.MultipartFormData {
 		toStore, err := req.MultipartFormContent()
 		if err != nil {
-			return r.respond(500, err)
+			return r.Respond(500, err)
 		}
 
 		for filename, _ := range toStore {
@@ -108,11 +108,11 @@ func (s Interactor) Post(req SafeRequestGetter, resource *domain.PathInfo, dataH
 		}
 
 		if err := s.fileHandler.SaveFiles(resource.File, toStore); err != nil {
-			return r.respond(500, err)
+			return r.Respond(500, err)
 		}
 
 		//onUpdateURI(resource.URI)// needs websocket interface
-		return r.respond(201)
+		return r.Respond(201)
 	} else {
 		if !resource.Exists {
 			isNew = true
@@ -128,18 +128,18 @@ func (s Interactor) Post(req SafeRequestGetter, resource *domain.PathInfo, dataH
 			switch dataMime {
 			case constant.ApplicationJSON:
 				if err := s.JSONPatch(g, req.Body()); err != nil {
-					return r.respond(400, "failed to handle JSONPatch request")
+					return r.Respond(400, "failed to handle JSONPatch request")
 				}
 			case constant.ApplicationSPARQLUpdate:
 				if ecode, err := s.sparqlHandler.SPARQLUpdate(g, req.Body()); err != nil {
-					return r.respond(ecode, "Error processing SPARQL Update: "+err.Error())
+					return r.Respond(ecode, "Error processing SPARQL Update: "+err.Error())
 				}
 			default:
 				s.parser.Parse(g, req.Body(), dataMime)
 			}
 
 			if err := s.fileHandler.CreateFileOrDir(resource.File); err != nil {
-				return r.respond(500, err.Error())
+				return r.Respond(500, err.Error())
 			}
 
 			if g.NotEmpty() {
@@ -153,7 +153,7 @@ func (s Interactor) Post(req SafeRequestGetter, resource *domain.PathInfo, dataH
 		} else {
 			log.Println("==>>")
 			if err := s.fileHandler.SaveFiles(resource.File, map[string]io.Reader{resource.File: req.Body()}); err != nil {
-				return r.respond(500, err.Error())
+				return r.Respond(500, err.Error())
 			}
 		}
 
@@ -162,10 +162,10 @@ func (s Interactor) Post(req SafeRequestGetter, resource *domain.PathInfo, dataH
 			//onUpdateURI(resource.ParentURI)
 		}
 		if isNew {
-			return r.respond(201)
+			return r.Respond(201)
 		}
-		return r.respond(200)
+		return r.Respond(200)
 	}
 
-	return r.respond(500)
+	return r.Respond(500)
 }

@@ -545,8 +545,8 @@ func newCert(w http.ResponseWriter, req uc.SafeRequestGetter, s *Server) SystemR
 		loggedUser := w.Header().Get("User")
 		s.logger.Debug("Checking if request is authenticated: " + loggedUser)
 		if len(loggedUser) > 0 && loggedUser == webidURI && strings.HasPrefix(webidURI, resource.Base) {
-			acl := NewWAC(loggedUser, "")
-			aclStatus, err := s.AllowWrite(acl, req.Header("Origin"), strings.Split(webidURI, "#")[0])
+			acl := uc.NewWAC(loggedUser, "")
+			aclStatus, err := s.i.AllowWrite(acl, req.Header("Origin"), strings.Split(webidURI, "#")[0])
 			if aclStatus > 200 || err != nil {
 				return SystemReturn{Status: aclStatus, Body: err.Error()}
 			}

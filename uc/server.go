@@ -7,12 +7,19 @@ import (
 )
 
 type LogicHandler interface {
-	Delete(req SafeRequestGetter, resource *domain.PathInfo, acl WAC) *response
-	GetHead(req RequestGetter, resource *domain.PathInfo, contentType string, acl WAC) *response
-	MkCol(req SafeRequestGetter, resource *domain.PathInfo, acl WAC) *response
-	Options(req SafeRequestGetter, resource *domain.PathInfo) *response
-	Patch(req SafeRequestGetter, resource *domain.PathInfo, dataHasParser bool, dataMime string, acl WAC) *response
-	Post(req SafeRequestGetter, resource *domain.PathInfo, dataHasParser bool, dataMime string, acl WAC) *response
+	Delete(req SafeRequestGetter, resource *domain.PathInfo, acl WAC) *Response
+	GetHead(req RequestGetter, resource *domain.PathInfo, contentType string, acl WAC) *Response
+	MkCol(req SafeRequestGetter, resource *domain.PathInfo, acl WAC) *Response
+	Options(req SafeRequestGetter, resource *domain.PathInfo) *Response
+	Patch(req SafeRequestGetter, resource *domain.PathInfo, dataHasParser bool, dataMime string, acl WAC) *Response
+	Post(req SafeRequestGetter, resource *domain.PathInfo, dataHasParser bool, dataMime string, acl WAC) *Response
+	Put(req RequestGetter, resource *domain.PathInfo, acl WAC) *Response
+
+	AllowRead(acl WAC, origin, path string) (int, error) // fixme unify the interface
+	AllowWrite(acl WAC, origin, path string) (int, error)
+	AllowControl(acl WAC, origin, path string) (int, error)
+	AllowAppend(acl WAC, origin, path string) (int, error)
+	VerifyDelegator(delegator string, delegatee string) bool
 }
 
 // Interactor object contains http handler, root where the data is found and whether it uses vhosts or not
@@ -32,6 +39,7 @@ type Interactor struct {
 	uriManipulator URIManipulator
 	ldpcHandler    LDPCHandler
 	uuidGenerator  UUIDGenerator
+	authorizer     ACL
 }
 
 func (s Interactor) handleStatusText(status int, err error) string {

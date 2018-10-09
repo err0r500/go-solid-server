@@ -1,4 +1,4 @@
-package gold
+package uc
 
 import (
 	"testing"
@@ -44,9 +44,4 @@ func TestPreferHeaderParser(t *testing.T) {
 			assert.Equal(t, "http://www.w3.org/ns/ldp#PreferContainment", uri)
 		}
 	}
-}
-
-func TestNewUUID(t *testing.T) {
-	uuid := NewUUID()
-	assert.Equal(t, 32, len(uuid))
 }

@@ -7,7 +7,7 @@ import (
 	"github.com/err0r500/go-solid-server/domain"
 )
 
-func (s Interactor) Options(req SafeRequestGetter, resource *domain.PathInfo) *response {
+func (s Interactor) Options(req SafeRequestGetter, resource *domain.PathInfo) *Response {
 	r := NewResponse()
 	// TODO: WAC
 	corsReqH := req.HeaderComplete("Access-Control-Request-Headers") // CORS preflight only
@@ -33,5 +33,5 @@ func (s Interactor) Options(req SafeRequestGetter, resource *domain.PathInfo) *r
 	r.HeaderAdd("Link", s.uriManipulator.Brack(resource.Base+"/,query")+"; rel=\"http://www.w3.org/ns/solid/terms#twinqlEndpoint\"")
 	r.HeaderAdd("Link", s.uriManipulator.Brack(resource.Base+"/,proxy?uri=")+"; rel=\"http://www.w3.org/ns/solid/terms#proxyEndpoint\"")
 
-	return r.respond(200)
+	return r.Respond(200)
 }

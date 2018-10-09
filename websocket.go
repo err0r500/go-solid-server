@@ -7,6 +7,8 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/err0r500/go-solid-server/uuid"
+
 	"golang.org/x/net/websocket"
 )
 
@@ -62,7 +64,7 @@ func websocketHandler(ws *websocket.Conn) {
 			if _, ex := websocketSubs[uri]; !ex {
 				websocketSubs[uri] = map[*websocket.Conn]string{}
 			}
-			websocketSubs[uri][ws] = NewUUID()
+			websocketSubs[uri][ws] = uuid.New().UUID()
 			websocketSubsL.Unlock()
 			websocket.Message.Send(ws, "ack "+uri)
 

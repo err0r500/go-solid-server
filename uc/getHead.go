@@ -12,12 +12,11 @@ import (
 	"github.com/err0r500/go-solid-server/mime"
 )
 
-func (s Interactor) GetHead(req RequestGetter, resource *domain.PathInfo, contentType string, acl WAC) *response {
+func (s Interactor) GetHead(req RequestGetter, resource *domain.PathInfo, contentType string, acl WAC) *Response {
 	r := NewResponse()
 	magicType := resource.FileType
 	maybeRDF := false
 	globPath := ""
-	// etag := ""
 
 	// check for glob
 	glob := false
@@ -34,12 +33,12 @@ func (s Interactor) GetHead(req RequestGetter, resource *domain.PathInfo, conten
 		var err error
 		resource, err = s.pathInformer.GetPathInfo(resource.Base + "/" + path)
 		if err != nil {
-			return r.respond(500, err)
+			return r.Respond(500, err)
 		}
 	}
 
 	if !resource.Exists {
-		return r.respond(404, s.templater.NotFound())
+		return r.Respond(404, s.templater.NotFound())
 	}
 
 	// First redirect to path + trailing slash if it's missing
@@ -48,7 +47,7 @@ func (s Interactor) GetHead(req RequestGetter, resource *domain.PathInfo, conten
 		urlStr := resource.URI
 		s.logger.Debug("Redirecting to", urlStr)
 		r.redirectURL = urlStr
-		return r.respond(301)
+		return r.Respond(301)
 	}
 
 	// overwrite ACL Link header
@@ -58,7 +57,7 @@ func (s Interactor) GetHead(req RequestGetter, resource *domain.PathInfo, conten
 	if s.Config.Vhosts && !resource.Exists && resource.Base == strings.TrimRight(req.BaseURI(), "/") && contentType == constant.TextHtml && req.Method() != "HEAD" {
 		r.HeaderSet(constant.HCType, contentType)
 		r.redirectURL = s.Config.SignUpApp + url.QueryEscape(resource.Obj.Scheme+"://"+resource.Obj.Host+"/"+constant.SystemPrefix+"/accountStatus")
-		return r.respond(303)
+		return r.Respond(303)
 	}
 
 	if resource.IsDir {
@@ -69,7 +68,7 @@ func (s Interactor) GetHead(req RequestGetter, resource *domain.PathInfo, conten
 	status := 501
 	aclStatus, err := s.AllowRead(acl, req.Header("Origin"), resource.URI)
 	if aclStatus > 200 || err != nil {
-		return r.respond(aclStatus, s.handleStatusText(aclStatus, err))
+		return r.Respond(aclStatus, s.handleStatusText(aclStatus, err))
 	}
 
 	if req.Method() == "HEAD" {
@@ -78,16 +77,16 @@ func (s Interactor) GetHead(req RequestGetter, resource *domain.PathInfo, conten
 
 	etag, err := s.fileHandler.NewETag(resource.File)
 	if err != nil {
-		return r.respond(500, err)
+		return r.Respond(500, err)
 	}
 	r.HeaderSet("ETag", "\""+etag+"\"")
 
 	if !req.IfMatch("\"" + etag + "\"") {
-		return r.respond(412, "412 - Precondition Failed")
+		return r.Respond(412, "412 - Precondition Failed")
 	}
 	if !req.IfNoneMatch("\""+etag+"\"") && contentType != constant.TextHtml {
 		// do not return cached views of dirs for html requests
-		return r.respond(304, "304 - Not Modified")
+		return r.Respond(304, "304 - Not Modified")
 	}
 
 	g := domain.NewGraph(resource.URI)
@@ -101,7 +100,7 @@ func (s Interactor) GetHead(req RequestGetter, resource *domain.PathInfo, conten
 				if s.fileHandler.Exists(resource.File + dirIndex) {
 					resource, err = s.pathInformer.GetPathInfo(resource.Base + "/" + resource.Path + dirIndex)
 					if err != nil {
-						return r.respond(500, err)
+						return r.Respond(500, err)
 					}
 					r.HeaderSet("Link", s.uriManipulator.Brack(resource.MetaURI)+"; rel=\"meta\", "+s.uriManipulator.Brack(resource.AclURI)+"; rel=\"acl\"")
 					break
@@ -109,7 +108,7 @@ func (s Interactor) GetHead(req RequestGetter, resource *domain.PathInfo, conten
 					//TODO load file manager app from local preference file
 					r.HeaderSet(constant.HCType, contentType)
 					r.redirectURL = s.Config.DirApp + resource.Obj.Scheme + "/" + resource.Obj.Host + "/" + resource.Obj.Path + "?" + req.URLRawQuery()
-					return r.respond(303)
+					return r.Respond(303)
 				}
 			}
 		} else {
@@ -188,7 +187,7 @@ func (s Interactor) GetHead(req RequestGetter, resource *domain.PathInfo, conten
 							}
 							f, err := s.pathInformer.GetPathInfo(res)
 							if err != nil {
-								r.respond(500, err)
+								r.Respond(500, err)
 							}
 							if info.IsDir() {
 								_s = domain.NewResource(f.URI)
@@ -262,40 +261,40 @@ func (s Interactor) GetHead(req RequestGetter, resource *domain.PathInfo, conten
 			r.HeaderSet("Link", s.uriManipulator.Brack(resource.MetaURI)+"; rel=\"meta\", "+s.uriManipulator.Brack(resource.AclURI)+"; rel=\"acl\"")
 			if maybeRDF {
 				r.HeaderSet(constant.HCType, contentType)
-				return r.respond(200, s.templater.Login())
+				return r.Respond(200, s.templater.Login())
 			}
 
 			r.HeaderSet(constant.HCType, magicType)
-			r.body, err = s.fileHandler.GetFileContent(resource.File)
+			r.Body, err = s.fileHandler.GetFileContent(resource.File)
 			if err != nil {
-				return r.respond(500, err.Error())
+				return r.Respond(500, err.Error())
 			}
 
-			return r.respond(200)
+			return r.Respond(200)
 		}
 	}
 
 	if status != 200 {
-		return r.respond(status)
+		return r.Respond(status)
 	}
 
 	if req.Method() == "HEAD" {
 		r.HeaderSet(constant.HCType, contentType)
-		return r.respond(status)
+		return r.Respond(status)
 	}
 
 	if !maybeRDF && len(magicType) > 0 {
 		r.HeaderSet(constant.HCType, magicType)
 		if status != 200 {
-			return r.respond(status)
+			return r.Respond(status)
 		}
 
-		r.body, err = s.fileHandler.GetFileContent(resource.File)
+		r.Body, err = s.fileHandler.GetFileContent(resource.File)
 		if err != nil {
-			return r.respond(500, err.Error())
+			return r.Respond(500, err.Error())
 		}
 
-		return r.respond(200)
+		return r.Respond(200)
 	}
 
 	if maybeRDF {
@@ -305,9 +304,9 @@ func (s Interactor) GetHead(req RequestGetter, resource *domain.PathInfo, conten
 
 	data, err := s.parser.Serialize(g, contentType)
 	if err != nil {
-		return r.respond(500, err)
+		return r.Respond(500, err)
 	}
 
-	r.body = []byte(data)
-	return r.respond(200)
+	r.Body = []byte(data)
+	return r.Respond(200)
 }

@@ -1,40 +1,44 @@
 package uc
 
-type response struct {
-	status      int
+type Response struct {
+	Status      int
 	headers     map[string][]string
-	body        []byte
+	Body        []byte
 	redirectURL string
 	argv        []interface{}
 }
 
-func NewResponse() *response {
-	return &response{
-		status:  500,
+func NewResponse() *Response {
+	return &Response{
+		Status:  500,
 		headers: map[string][]string{},
 	}
 }
 
-func (r *response) HeaderAdd(key, value string) {
+func (r *Response) Headers() map[string][]string {
+	return r.headers
+}
+
+func (r *Response) HeaderAdd(key, value string) {
 	r.headers[key] = append(r.headers[key], value)
 }
 
-func (r *response) HeaderSet(key, value string) {
+func (r *Response) HeaderSet(key, value string) {
 	r.headers[key] = []string{value}
 }
 
-func (r *response) HeaderDel(key string) {
+func (r *Response) HeaderDel(key string) {
 	r.headers[key] = []string{}
 }
 
-func (r *response) respond(status int, a ...interface{}) *response {
-	r.status = status
+func (r *Response) Respond(status int, a ...interface{}) *Response {
+	r.Status = status
 	r.argv = a
 	return r
 }
 
-func (r *response) ShouldRedirect() (bool, string) {
-	switch r.status {
+func (r *Response) ShouldRedirect() (bool, string) {
+	switch r.Status {
 	case 301, 303:
 		return true, r.redirectURL
 	default:

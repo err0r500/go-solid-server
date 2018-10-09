@@ -2,22 +2,17 @@ package gold
 
 import (
 	"bytes"
-	"encoding/json"
 	"errors"
-	"fmt"
 	"io"
-	"io/ioutil"
 	"log"
 	"net/http"
 	"net/url"
-	"path/filepath"
 	"strings"
 
+	"github.com/err0r500/go-solid-server/encoder"
 	"github.com/err0r500/go-solid-server/reqHandler"
 
 	"github.com/err0r500/go-solid-server/constant"
-
-	"github.com/err0r500/go-solid-server/encoder"
 
 	"github.com/err0r500/go-solid-server/domain"
 	"github.com/err0r500/go-solid-server/mime"
@@ -26,6 +21,7 @@ import (
 
 // Server object contains http handler, root where the data is found and whether it uses vhosts or not
 type Server struct {
+	i      uc.LogicHandler
 	Config domain.ServerConfig
 
 	cookieManager  uc.CookieManager
@@ -40,65 +36,8 @@ type Server struct {
 	templater      uc.Templater
 	tokenStorer    uc.TokenStorer
 	uriManipulator uc.URIManipulator
-}
-
-func (s Server) handleStatusText(status int, err error) string {
-	switch status {
-	case 200:
-		return "HTTP 200 - OK"
-	case 401:
-		return s.templater.Unauthenticated()
-	case 403:
-		return s.templater.Unauthorized()
-	case 404:
-		return "HTTP 404 - Not found\n\n" + err.Error()
-	case 500:
-		return "HTTP 500 - Internal Server Error\n\n" + err.Error()
-	default: // 501
-		return "HTTP 501 - Not implemented\n\n" + err.Error()
-	}
-}
-
-type response struct {
-	status      int
-	headers     map[string][]string
-	body        []byte
-	redirectURL string
-	argv        []interface{}
-}
-
-func NewResponse() *response {
-	return &response{
-		status:  500,
-		headers: map[string][]string{},
-	}
-}
-
-func (r *response) HeaderAdd(key, value string) {
-	r.headers[key] = append(r.headers[key], value)
-}
-
-func (r *response) HeaderSet(key, value string) {
-	r.headers[key] = []string{value}
-}
-
-func (r *response) HeaderDel(key string) {
-	r.headers[key] = []string{}
-}
-
-func (r *response) respond(status int, a ...interface{}) *response {
-	r.status = status
-	r.argv = a
-	return r
-}
-
-func (r *response) ShouldRedirect() (bool, string) {
-	switch r.status {
-	case 301, 303:
-		return true, r.redirectURL
-	default:
-		return false, ""
-	}
+	uuidGen        uc.UUIDGenerator
+	authorizer     uc.ACL
 }
 
 // ServeHTTP handles the response
@@ -128,33 +67,33 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	if r == nil {
 		log.Println("received nil response on ", req.Method)
 	}
-	for key, value := range r.headers {
+	for key, value := range r.Headers() {
 		for _, v := range value {
 			w.Header().Add(key, v)
 		}
 	}
 	if ok, newURL := r.ShouldRedirect(); ok {
-		http.Redirect(w, req, newURL, r.status)
+		http.Redirect(w, req, newURL, r.Status)
 	}
 
-	if r.status > 0 {
-		w.WriteHeader(r.status)
+	if r.Status > 0 {
+		w.WriteHeader(r.Status)
 	}
-	if r.body != nil {
-		if _, err := w.Write(r.body); err != nil {
+	if r.Body != nil {
+		if _, err := w.Write(r.Body); err != nil {
 			s.logger.Debug("failed to write response body")
 			return
 		}
 	}
 
-	if len(r.argv) > 0 {
-		fmt.Fprint(w, r.argv...)
-	}
+	//if len(r.argv) > 0 {
+	//	fmt.Fprint(w, r.argv...)
+	//}
 }
 
 // Twinql Query
-func TwinqlQuery(w http.ResponseWriter, req uc.SafeRequestGetter, s *Server, user string) *response {
-	r := new(response)
+func TwinqlQuery(w http.ResponseWriter, req uc.SafeRequestGetter, s *Server, user string) *uc.Response {
+	r := uc.NewResponse()
 
 	err := s.ProxyReq(w, req, s.Config.QueryTemplate, user)
 	if err != nil {
@@ -164,687 +103,7 @@ func TwinqlQuery(w http.ResponseWriter, req uc.SafeRequestGetter, s *Server, use
 	return r
 }
 
-func (s *Server) Options(req uc.SafeRequestGetter, resource *domain.PathInfo) *response {
-	r := NewResponse()
-	// TODO: WAC
-	corsReqH := req.HeaderComplete("Access-Control-Request-Headers") // CORS preflight only
-	if len(corsReqH) > 0 {
-		r.HeaderSet("Access-Control-Allow-Headers", strings.Join(corsReqH, ", "))
-	}
-	corsReqM := req.HeaderComplete("Access-Control-Request-Method") // CORS preflight only
-	if len(corsReqM) > 0 {
-		r.HeaderSet("Access-Control-Allow-Methods", strings.Join(corsReqM, ", "))
-	} else {
-		r.HeaderSet("Access-Control-Allow-Methods", strings.Join(constant.AllMethods(), ", "))
-	}
-
-	// set LDP Link headers
-	if resource.IsDir {
-		r.HeaderAdd("Link", s.uriManipulator.Brack("http://www.w3.org/ns/ldp#BasicContainer")+"; rel=\"type\"")
-	}
-	r.HeaderAdd("Link", s.uriManipulator.Brack("http://www.w3.org/ns/ldp#Resource")+"; rel=\"type\"")
-
-	// set API Link headers
-	r.HeaderAdd("Link", s.uriManipulator.Brack(resource.Base+"/"+constant.SystemPrefix+"/login")+"; rel=\"http://www.w3.org/ns/solid/terms#loginEndpoint\"")
-	r.HeaderAdd("Link", s.uriManipulator.Brack(resource.Base+"/"+constant.SystemPrefix+"/logout")+"; rel=\"http://www.w3.org/ns/solid/terms#logoutEndpoint\"")
-	r.HeaderAdd("Link", s.uriManipulator.Brack(resource.Base+"/,query")+"; rel=\"http://www.w3.org/ns/solid/terms#twinqlEndpoint\"")
-	r.HeaderAdd("Link", s.uriManipulator.Brack(resource.Base+"/,proxy?uri=")+"; rel=\"http://www.w3.org/ns/solid/terms#proxyEndpoint\"")
-
-	return r.respond(200)
-}
-
-func (s Server) GetHead(req uc.RequestGetter, resource *domain.PathInfo, contentType string, acl WAC) *response {
-	r := NewResponse()
-	magicType := resource.FileType
-	maybeRDF := false
-	globPath := ""
-	etag := ""
-
-	// check for glob
-	glob := false
-	if strings.Contains(resource.Obj.Path, "*") {
-		glob = true
-		path := filepath.Dir(resource.Obj.Path)
-		globPath = resource.File
-		if path == "." {
-			path = ""
-		} else {
-			path += "/"
-		}
-
-		var err error
-		resource, err = s.pathInformer.GetPathInfo(resource.Base + "/" + path)
-		if err != nil {
-			return r.respond(500, err)
-		}
-	}
-
-	if !resource.Exists {
-		return r.respond(404, s.templater.NotFound())
-	}
-
-	// First redirect to path + trailing slash if it's missing
-	if resource.IsDir && !glob && !strings.HasSuffix(req.BaseURI(), "/") {
-		r.HeaderSet(constant.HCType, contentType)
-		urlStr := resource.URI
-		s.logger.Debug("Redirecting to", urlStr)
-		//http.Redirect(w, req.Request(), urlStr, 301)
-		r.redirectURL = urlStr
-		return r.respond(301)
-	}
-
-	// overwrite ACL Link header
-	r.HeaderSet("Link", s.uriManipulator.Brack(resource.AclURI)+"; rel=\"acl\", "+s.uriManipulator.Brack(resource.MetaURI)+"; rel=\"meta\"")
-
-	// redirect to app
-	if s.Config.Vhosts && !resource.Exists && resource.Base == strings.TrimRight(req.BaseURI(), "/") && contentType == constant.TextHtml && req.Method() != "HEAD" {
-		r.HeaderSet(constant.HCType, contentType)
-		r.redirectURL = s.Config.SignUpApp + url.QueryEscape(resource.Obj.Scheme+"://"+resource.Obj.Host+"/"+constant.SystemPrefix+"/accountStatus")
-		return r.respond(303)
-	}
-
-	if resource.IsDir {
-		r.HeaderAdd("Link", s.uriManipulator.Brack("http://www.w3.org/ns/ldp#BasicContainer")+"; rel=\"type\"")
-	}
-	r.HeaderAdd("Link", s.uriManipulator.Brack("http://www.w3.org/ns/ldp#Resource")+"; rel=\"type\"")
-
-	status := 501
-	aclStatus, err := s.AllowRead(acl, req.Header("Origin"), resource.URI)
-	if aclStatus > 200 || err != nil {
-		return r.respond(aclStatus, s.handleStatusText(aclStatus, err))
-	}
-
-	if req.Method() == "HEAD" {
-		r.HeaderSet("Content-Length", fmt.Sprintf("%d", resource.Size))
-	}
-
-	etag, err = NewETag(resource.File)
-	if err != nil {
-		return r.respond(500, err)
-	}
-	r.HeaderSet("ETag", "\""+etag+"\"")
-
-	if !req.IfMatch("\"" + etag + "\"") {
-		return r.respond(412, "412 - Precondition Failed")
-	}
-	if !req.IfNoneMatch("\""+etag+"\"") && contentType != constant.TextHtml {
-		// do not return cached views of dirs for html requests
-		return r.respond(304, "304 - Not Modified")
-	}
-
-	g := domain.NewGraph(resource.URI)
-	if resource.IsDir {
-		if len(s.Config.DirIndex) > 0 && contentType == constant.TextHtml {
-
-			magicType = constant.TextHtml
-			maybeRDF = false
-			for _, dirIndex := range s.Config.DirIndex {
-				status = 200
-				if s.fileHandler.Exists(resource.File + dirIndex) {
-					resource, err = s.pathInformer.GetPathInfo(resource.Base + "/" + resource.Path + dirIndex)
-					if err != nil {
-						return r.respond(500, err)
-					}
-					r.HeaderSet("Link", s.uriManipulator.Brack(resource.MetaURI)+"; rel=\"meta\", "+s.uriManipulator.Brack(resource.AclURI)+"; rel=\"acl\"")
-					break
-				} else if req.Method() != "HEAD" {
-					//TODO load file manager app from local preference file
-					r.HeaderSet(constant.HCType, contentType)
-					r.redirectURL = s.Config.DirApp + resource.Obj.Scheme + "/" + resource.Obj.Host + "/" + resource.Obj.Path + "?" + req.URLRawQuery()
-					return r.respond(303)
-				}
-			}
-		} else {
-			r.HeaderAdd("Link", s.uriManipulator.Brack(resource.MetaURI)+"; rel=\"meta\"")
-
-			root := domain.NewResource(resource.URI)
-			g.AddTriple(root, domain.NewResource("http://www.w3.org/1999/02/22-rdf-syntax-ns#type"), domain.NewResource("http://www.w3.org/ns/posix/stat#Directory"))
-			g.AddTriple(root, domain.NewResource("http://www.w3.org/1999/02/22-rdf-syntax-ns#type"), domain.NewResource("http://www.w3.org/ns/ldp#Container"))
-			g.AddTriple(root, domain.NewResource("http://www.w3.org/1999/02/22-rdf-syntax-ns#type"), domain.NewResource("http://www.w3.org/ns/ldp#BasicContainer"))
-
-			g.AddTriple(root, domain.NewResource("http://www.w3.org/ns/posix/stat#mtime"), domain.NewLiteral(fmt.Sprintf("%d", resource.ModTime.Unix())))
-			g.AddTriple(root, domain.NewResource("http://www.w3.org/ns/posix/stat#size"), domain.NewLiteral(fmt.Sprintf("%d", resource.Size)))
-
-			kb := domain.NewGraph(resource.MetaURI)
-			s.fileHandler.UpdateGraphFromFile(kb, s.parser, resource.MetaFile)
-			if kb.NotEmpty() {
-				for triple := range kb.IterTriples() {
-					var subject domain.Term
-					if kb.One(domain.NewResource(resource.MetaURI), nil, nil) != nil {
-						subject = domain.NewResource(resource.URI)
-					} else {
-						subject = triple.Subject
-					}
-					g.AddTriple(subject, triple.Predicate, triple.Object)
-				}
-			}
-			if glob {
-				matches, err := filepath.Glob(globPath)
-				if err == nil {
-					for _, file := range matches {
-						res, err := s.pathInformer.GetPathInfo(resource.Base + "/" + filepath.Dir(resource.Path) + "/" + filepath.Base(file))
-						if !res.IsDir && res.Exists && err == nil {
-							aclStatus, err = s.AllowRead(acl, req.Header("Origin"), res.URI)
-							if aclStatus == 200 && err == nil {
-								s.fileHandler.AppendFile(g, res.File, res.URI)
-								g.AddTriple(root, domain.NewResource("http://www.w3.org/ns/ldp#contains"), domain.NewResource(res.URI))
-							}
-						}
-					}
-				}
-			} else {
-				showContainment := true
-				showEmpty := false
-				pref := ParsePreferHeader(req.Header("Prefer"))
-				if len(pref.headers) > 0 {
-					r.HeaderSet("Preference-Applied", "return=representation")
-				}
-				for _, include := range pref.Includes() {
-					switch include {
-					case "http://www.w3.org/ns/ldp#PreferContainment":
-						showContainment = true
-					case "http://www.w3.org/ns/ldp#PreferEmptyContainer":
-						showEmpty = true
-					}
-				}
-				for _, omit := range pref.Omits() {
-					switch omit {
-					case "http://www.w3.org/ns/ldp#PreferContainment":
-						showContainment = false
-					case "http://www.w3.org/ns/ldp#PreferEmptyContainer":
-						showEmpty = false
-					}
-				}
-
-				if infos, err := ioutil.ReadDir(resource.File); err == nil {
-					var _s domain.Term
-					for _, info := range infos {
-						if info != nil {
-							// do not list ACLs and Meta files
-							if strings.HasSuffix(info.Name(), s.Config.ACLSuffix) || strings.HasSuffix(info.Name(), s.Config.MetaSuffix) {
-								continue
-							}
-							res := resource.URI + info.Name()
-							if info.IsDir() {
-								res += "/"
-							}
-							f, err := s.pathInformer.GetPathInfo(res)
-							if err != nil {
-								r.respond(500, err)
-							}
-							if info.IsDir() {
-								_s = domain.NewResource(f.URI)
-								if !showEmpty {
-									g.AddTriple(_s, domain.NewResource("http://www.w3.org/1999/02/22-rdf-syntax-ns#type"), domain.NewResource("http://www.w3.org/ns/ldp#BasicContainer"))
-									g.AddTriple(_s, domain.NewResource("http://www.w3.org/1999/02/22-rdf-syntax-ns#type"), domain.NewResource("http://www.w3.org/ns/ldp#Container"))
-								}
-								kb := domain.NewGraph(f.URI)
-								s.fileHandler.UpdateGraphFromFile(kb, s.parser, f.MetaFile)
-								if kb.NotEmpty() {
-									for _, st := range kb.All(_s, domain.NewResource("http://www.w3.org/1999/02/22-rdf-syntax-ns#type"), nil) {
-										if st != nil && st.Object != nil {
-											g.AddTriple(_s, domain.NewResource("http://www.w3.org/1999/02/22-rdf-syntax-ns#type"), st.Object)
-										}
-									}
-								}
-							} else {
-								_s = domain.NewResource(f.URI)
-								if !showEmpty {
-									g.AddTriple(_s, domain.NewResource("http://www.w3.org/1999/02/22-rdf-syntax-ns#type"), domain.NewResource("http://www.w3.org/ns/ldp#Resource"))
-									// add type if RDF resource
-
-									if f.FileType == constant.TextPlain {
-										firstLine, err := s.fileHandler.FileFirstLine(f.File)
-										if err != nil {
-											s.logger.Debug("scan error :" + err.Error())
-										}
-										if strings.HasPrefix(firstLine, "@prefix") || strings.HasPrefix(firstLine, "@base") {
-											kb := domain.NewGraph(f.URI)
-											s.fileHandler.UpdateGraphFromFile(kb, s.parser, f.File)
-											if kb.NotEmpty() {
-												for _, st := range kb.All(domain.NewResource(f.URI), domain.NewResource("http://www.w3.org/1999/02/22-rdf-syntax-ns#type"), nil) {
-													if st != nil && st.Object != nil {
-														g.AddTriple(_s, domain.NewResource("http://www.w3.org/1999/02/22-rdf-syntax-ns#type"), st.Object)
-													}
-												}
-											}
-										}
-									}
-								}
-							}
-							if !showEmpty {
-								g.AddTriple(_s, domain.NewResource("http://www.w3.org/ns/posix/stat#mtime"), domain.NewLiteral(fmt.Sprintf("%d", info.ModTime().Unix())))
-								g.AddTriple(_s, domain.NewResource("http://www.w3.org/ns/posix/stat#size"), domain.NewLiteral(fmt.Sprintf("%d", info.Size())))
-							}
-							if showContainment {
-								g.AddTriple(root, domain.NewResource("http://www.w3.org/ns/ldp#contains"), _s)
-							}
-						}
-					}
-				}
-			}
-			status = 200
-			maybeRDF = true
-		}
-	} else {
-		magicType = resource.FileType
-		maybeRDF = resource.MaybeRDF
-		if len(mime.MimeRdfExt[resource.Extension]) > 0 {
-			maybeRDF = true
-		}
-		if !maybeRDF && magicType == constant.TextPlain {
-			maybeRDF = true
-		}
-		s.logger.Debug("Setting CType to:", magicType)
-		status = 200
-
-		if req.Method() == "GET" && strings.Contains(contentType, constant.TextHtml) {
-			// delete ETag to force load the app
-			r.HeaderDel("ETag")
-			r.HeaderSet("Link", s.uriManipulator.Brack(resource.MetaURI)+"; rel=\"meta\", "+s.uriManipulator.Brack(resource.AclURI)+"; rel=\"acl\"")
-			if maybeRDF {
-				r.HeaderSet(constant.HCType, contentType)
-				return r.respond(200, s.templater.Login())
-			}
-
-			r.HeaderSet(constant.HCType, magicType)
-			r.body, err = s.fileHandler.GetFileContent(resource.File)
-			if err != nil {
-				return r.respond(500, err.Error())
-			}
-
-			return r.respond(200)
-		}
-	}
-
-	if status != 200 {
-		return r.respond(status)
-	}
-
-	if req.Method() == "HEAD" {
-		r.HeaderSet(constant.HCType, contentType)
-		return r.respond(status)
-	}
-
-	if !maybeRDF && len(magicType) > 0 {
-		r.HeaderSet(constant.HCType, magicType)
-		if status != 200 {
-			return r.respond(status)
-		}
-
-		r.body, err = s.fileHandler.GetFileContent(resource.File)
-		if err != nil {
-			return r.respond(500, err.Error())
-		}
-
-		return r.respond(200)
-	}
-
-	if maybeRDF {
-		s.fileHandler.UpdateGraphFromFile(g, s.parser, resource.File)
-		r.HeaderSet(constant.HCType, contentType)
-	}
-
-	data, err := s.rdfHandler.Serialize(g, contentType)
-	if err != nil {
-		return r.respond(500, err)
-	}
-
-	r.body = []byte(data)
-	return r.respond(200)
-}
-
-func (s *Server) Patch(req uc.SafeRequestGetter, resource *domain.PathInfo, dataHasParser bool, dataMime string, acl WAC) (r *response) {
-	r = &response{}
-
-	// check append first
-	aclAppend, err := s.AllowAppend(acl, req.Header("Origin"), resource.URI)
-	if aclAppend > 200 || err != nil {
-		// check if we can write then
-		aclWrite, err := s.AllowWrite(acl, req.Header("Origin"), resource.URI)
-		if aclWrite > 200 || err != nil {
-			return r.respond(aclWrite, s.handleStatusText(aclWrite, err))
-		}
-	}
-
-	etag, _ := NewETag(resource.File)
-	if !req.IfMatch("\"" + etag + "\"") {
-		return r.respond(412, "412 - Precondition Failed")
-	}
-	if !req.IfNoneMatch("\"" + etag + "\"") {
-		return r.respond(412, "412 - Precondition Failed")
-	}
-
-	if dataHasParser {
-		s.logger.Debug("Preparing to PATCH resource", resource.URI, "with file", resource.File)
-		buf, _ := ioutil.ReadAll(req.Body())
-		body := ioutil.NopCloser(bytes.NewBuffer(buf))
-
-		req.Body().Close()
-
-		if req.Header("Content-Length") == "0" || len(buf) == 0 {
-			errmsg := "Could not patch resource. No SPARQL statements found in the request."
-			s.logger.Debug(errmsg)
-			return r.respond(400, errmsg)
-		}
-
-		g := domain.NewGraph(resource.URI)
-		s.fileHandler.UpdateGraphFromFile(g, s.parser, resource.File)
-
-		switch dataMime {
-		case constant.ApplicationJSON:
-			s.JSONPatch(g, body)
-		case constant.ApplicationSPARQLUpdate:
-			if ecode, err := s.sparqlHandler.SPARQLUpdate(g, body); err != nil {
-				return r.respond(ecode, "Error processing SPARQL Update: "+err.Error())
-			}
-		default:
-			if dataHasParser {
-				s.parser.Parse(g, body, dataMime)
-			}
-		}
-
-		err = s.fileHandler.SaveGraph(g, resource.File, constant.TextTurtle)
-		if err != nil {
-			s.logger.Debug("PATCH g.SaveGraph err: " + err.Error())
-			return r.respond(500, err)
-		}
-		s.logger.Debug("succefully patched resource", resource.URI)
-		onUpdateURI(resource.URI)
-		onUpdateURI(resource.ParentURI)
-
-		return r.respond(200)
-	}
-
-	return r.respond(500)
-}
-
-func (s Server) Post(req uc.SafeRequestGetter, resource *domain.PathInfo, dataHasParser bool, dataMime string, acl WAC) *response {
-	r := NewResponse()
-
-	// check append first
-	aclAppend, err := s.AllowAppend(acl, req.Header("Origin"), resource.URI)
-	if aclAppend > 200 || err != nil {
-		// check if we can write then
-		aclWrite, err := s.AllowWrite(acl, req.Header("Origin"), resource.URI)
-		if aclWrite > 200 || err != nil {
-			return r.respond(aclWrite, s.handleStatusText(aclWrite, err))
-		}
-	}
-	err = nil
-
-	etag, _ := NewETag(resource.File)
-	if !req.IfMatch("\"" + etag + "\"") {
-		return r.respond(412, "412 - Precondition Failed")
-	}
-	if !req.IfNoneMatch("\"" + etag + "\"") {
-		return r.respond(412, "412 - Precondition Failed")
-	}
-
-	// LDP
-	isNew := false
-	if resource.IsDir && dataMime != constant.MultipartFormData {
-		link := ParseLinkHeader(req.Header("Link")).MatchRel("type")
-		slug := req.Header("Slug")
-
-		uuid := NewUUID()
-		uuid = uuid[:6]
-
-		if !strings.HasSuffix(resource.Path, "/") {
-			resource.Path += "/"
-		}
-
-		if len(slug) > 0 {
-			if strings.HasPrefix(slug, "/") {
-				slug = strings.TrimLeft(slug, "/")
-			}
-			if strings.HasSuffix(slug, "/") {
-				slug = strings.TrimRight(slug, "/")
-			}
-			if s.fileHandler.Exists(resource.File + slug) {
-				slug += "-" + uuid
-			}
-		} else {
-			slug = uuid
-		}
-		resource.Path += slug
-
-		if link == "http://www.w3.org/ns/ldp#BasicContainer" {
-			if !strings.HasSuffix(resource.Path, "/") {
-				resource.Path += "/"
-			}
-			resource, err = s.pathInformer.GetPathInfo(resource.Base + "/" + resource.Path)
-			if err != nil {
-				s.logger.Debug("POST LDPC req.pathInfo err: " + err.Error())
-				return r.respond(500, err)
-			}
-
-			r.HeaderSet("Location", resource.URI)
-			r.HeaderSet("Link", s.uriManipulator.Brack(resource.MetaURI)+"; rel=\"meta\", "+s.uriManipulator.Brack(resource.AclURI)+"; rel=\"acl\"")
-			r.HeaderAdd("Link", s.uriManipulator.Brack("http://www.w3.org/ns/ldp#Resource")+"; rel=\"type\"")
-			r.HeaderAdd("Link", s.uriManipulator.Brack("http://www.w3.org/ns/ldp#BasicContainer")+"; rel=\"type\"")
-
-			if err := s.fileHandler.SaveFiles(resource.File, map[string]io.Reader{resource.MetaFile: req.Body()}); err != nil {
-				return r.respond(500, err)
-			}
-			s.logger.Debug("Created dir " + resource.File)
-
-			r.HeaderSet("Location", resource.URI)
-			onUpdateURI(resource.URI)
-			onUpdateURI(resource.ParentURI)
-			return r.respond(201)
-		}
-
-		resource, err = s.pathInformer.GetPathInfo(resource.Base + "/" + resource.Path)
-		if err != nil {
-			s.logger.Debug("POST LDPR req.pathInfo err: " + err.Error())
-			return r.respond(500, err)
-		}
-		r.HeaderSet("Location", resource.URI)
-		r.HeaderSet("Link", s.uriManipulator.Brack(resource.MetaURI)+"; rel=\"meta\", "+s.uriManipulator.Brack(resource.AclURI)+"; rel=\"acl\"")
-		// LDP header
-		r.HeaderAdd("Link", s.uriManipulator.Brack("http://www.w3.org/ns/ldp#Resource")+"; rel=\"type\"")
-		isNew = true
-	}
-
-	if dataMime == constant.MultipartFormData {
-		toStore, err := req.MultipartFormContent()
-		if err != nil {
-			return r.respond(500, err)
-		}
-
-		for filename, _ := range toStore {
-			location := &url.URL{Path: filename}
-			r.HeaderAdd("Location", resource.URI+location.String())
-		}
-
-		if err := s.fileHandler.SaveFiles(resource.File, toStore); err != nil {
-			return r.respond(500, err)
-		}
-
-		onUpdateURI(resource.URI)
-		return r.respond(201)
-	} else {
-		if !resource.Exists {
-			isNew = true
-		}
-		if resource.IsDir {
-			resource.File = resource.File + "/" + s.Config.MetaSuffix
-		}
-
-		if dataHasParser {
-			g := domain.NewGraph(resource.URI)
-			s.fileHandler.UpdateGraphFromFile(g, s.parser, resource.File)
-
-			switch dataMime {
-			case constant.ApplicationJSON:
-				if err := s.JSONPatch(g, req.Body()); err != nil {
-					return r.respond(400, "failed to handle JSONPatch request")
-				}
-			case constant.ApplicationSPARQLUpdate:
-				if ecode, err := s.sparqlHandler.SPARQLUpdate(g, req.Body()); err != nil {
-					return r.respond(ecode, "Error processing SPARQL Update: "+err.Error())
-				}
-			default:
-				s.parser.Parse(g, req.Body(), dataMime)
-			}
-
-			if err := s.fileHandler.CreateFileOrDir(resource.File); err != nil {
-				return r.respond(500, err.Error())
-			}
-
-			if g.NotEmpty() {
-				err = s.fileHandler.SaveGraph(g, resource.File, constant.TextTurtle)
-				if err != nil {
-					s.logger.Debug("POST g.SaveGraph err: " + err.Error())
-				} else {
-					s.logger.Debug("Wrote resource file: " + resource.File)
-				}
-			}
-		} else {
-			log.Println("==>>")
-			if err := s.fileHandler.SaveFiles(resource.File, map[string]io.Reader{resource.File: req.Body()}); err != nil {
-				return r.respond(500, err.Error())
-			}
-		}
-
-		onUpdateURI(resource.URI)
-		if resource.URI != resource.ParentURI {
-			onUpdateURI(resource.ParentURI)
-		}
-		if isNew {
-			return r.respond(201)
-		}
-		return r.respond(200)
-	}
-
-	return r.respond(500)
-}
-
-func (s Server) Put(req uc.RequestGetter, resource *domain.PathInfo, acl WAC) *response {
-	r := NewResponse()
-	// LDP header
-	r.HeaderAdd("Link", s.uriManipulator.Brack("http://www.w3.org/ns/ldp#Resource")+"; rel=\"type\"")
-
-	// check append first
-	aclAppend, err := s.AllowAppend(acl, req.Header("Origin"), resource.URI)
-	if aclAppend > 200 || err != nil {
-		// check if we can write then
-		aclWrite, err := s.AllowWrite(acl, req.Header("Origin"), resource.URI)
-		if aclWrite > 200 || err != nil {
-			return r.respond(aclWrite, s.handleStatusText(aclWrite, err))
-		}
-	}
-
-	etag, _ := NewETag(resource.File)
-	if !req.IfMatch("\""+etag+"\"") || !req.IfNoneMatch("\""+etag+"\"") {
-		return r.respond(412, "412 - Precondition Failed")
-	}
-
-	isNew := true
-	if resource.Exists {
-		isNew = false
-	}
-
-	// LDP PUT should be merged with LDP POST into a common LDP "method" switch
-	if ParseLinkHeader(req.Header("Link")).MatchRel("type") == "http://www.w3.org/ns/ldp#BasicContainer" {
-		if err := s.fileHandler.CreateFileOrDir(resource.File); err != nil {
-			return r.respond(500, err)
-		}
-
-		// refresh resource and set the right headers
-		newResource, err := s.pathInformer.GetPathInfo(resource.URI)
-		if err != nil {
-			return r.respond(500, err)
-		}
-		r.HeaderSet("Link", s.uriManipulator.Brack(newResource.MetaURI)+"; rel=\"meta\", "+s.uriManipulator.Brack(newResource.AclURI)+"; rel=\"acl\"")
-		// LDP header
-		r.HeaderAdd("Link", s.uriManipulator.Brack("http://www.w3.org/ns/ldp#Resource")+"; rel=\"type\"")
-
-		onUpdateURI(newResource.URI)
-		onUpdateURI(newResource.ParentURI)
-		return r.respond(201)
-	}
-
-	if resource.IsDir {
-		r.HeaderAdd("Link", s.uriManipulator.Brack(resource.URI)+"; rel=\"describedby\"")
-		return r.respond(406, "406 - Cannot use PUT on a directory.")
-	}
-
-	if err := s.fileHandler.CreateOrUpdateFile(resource.File, req.Body()); err != nil {
-		return r.respond(500, err)
-	}
-
-	r.HeaderSet("Location", resource.URI)
-
-	onUpdateURI(resource.URI)
-	onUpdateURI(resource.ParentURI)
-	if isNew {
-		return r.respond(201)
-	}
-	return r.respond(200)
-}
-
-func (s Server) Delete(req uc.SafeRequestGetter, resource *domain.PathInfo, acl WAC) *response {
-	r := NewResponse()
-
-	aclWrite, err := s.AllowWrite(acl, req.Header("Origin"), resource.URI)
-	if aclWrite > 200 || err != nil {
-		return r.respond(aclWrite, s.handleStatusText(aclWrite, err))
-	}
-
-	if len(resource.Path) == 0 {
-		return r.respond(500, "500 - Cannot DELETE root (/)")
-	}
-
-	if !s.fileHandler.Exists(resource.File) {
-		return r.respond(404, s.templater.NotFound())
-	}
-
-	// remove ACL and meta files first
-	if resource.File != resource.AclFile {
-		s.fileHandler.Delete(resource.AclFile)
-	}
-	if resource.File != resource.MetaFile {
-		s.fileHandler.Delete(resource.MetaFile)
-	}
-	if err := s.fileHandler.Delete(resource.File); err != nil {
-		return r.respond(500, err)
-	}
-
-	onDeleteURI(resource.URI)
-	onUpdateURI(resource.ParentURI)
-	return r
-}
-
-func (s Server) MkCol(req uc.SafeRequestGetter, resource *domain.PathInfo, acl WAC) *response {
-	r := NewResponse()
-
-	aclWrite, err := s.AllowWrite(acl, req.Header("Origin"), resource.URI)
-	if aclWrite > 200 || err != nil {
-		return r.respond(aclWrite, s.handleStatusText(aclWrite, err))
-	}
-
-	if err := s.fileHandler.CreateFileOrDir(resource.File); err != nil {
-		return r.respond(409, err)
-	}
-
-	onUpdateURI(resource.URI)
-	onUpdateURI(resource.ParentURI)
-	return r.respond(201)
-}
-
-//func (s *Server) CopyMoveLockUnlock(w http.ResponseWriter, req uc.RequestGetter, resource *domain.PathInfo, acl WAC) (r *response) {
-//	respCode, err := s.AllowWrite(acl, req.Header("Origin"), resource.URI)
-//	if respCode > 200 || err != nil {
-//		return r.respond(respCode, s.handleStatusText(respCode, err))
-//	}
-//
-//	s.webdavHandler.HandleReq(w, req.Request())
-//	return nil // should not happen
-//}
-
-func (s *Server) handle(w http.ResponseWriter, req uc.RequestGetter) *response {
+func (s *Server) handle(w http.ResponseWriter, req uc.RequestGetter) *uc.Response {
 	var err error
 
 	defer func() {
@@ -865,18 +124,18 @@ func (s *Server) handle(w http.ResponseWriter, req uc.RequestGetter) *response {
 	// Authentication
 	user := s.authn(req, w)
 	w.Header().Set("User", user)
-	acl := NewWAC(user, req.FormValue("key"))
+	acl := uc.NewWAC(user, req.FormValue("key"))
 
 	// check if is owner
 	isOwner := false
 	resource, _ := s.pathInformer.GetPathInfo(req.BaseURI())
 	if len(user) > 0 {
-		if aclStatus, err := s.AllowWrite(acl, req.Header("Origin"), resource.Base); aclStatus == 200 && err == nil {
+		if aclStatus, err := s.i.AllowWrite(acl, req.Header("Origin"), resource.Base); aclStatus == 200 && err == nil {
 			isOwner = true
 		}
 	}
 
-	r := &response{}
+	r := uc.NewResponse()
 	// Intercept API requests
 	if req.TargetsAPI() {
 		resp := HandleSystem(w, req, s, user, isOwner)
@@ -884,7 +143,7 @@ func (s *Server) handle(w http.ResponseWriter, req uc.RequestGetter) *response {
 			io.Copy(w, bytes.NewReader(resp.Bytes))
 			return r
 		}
-		return r.respond(resp.Status, resp.Body)
+		return r.Respond(resp.Status, resp.Body)
 	}
 
 	// Proxy requests
@@ -905,7 +164,7 @@ func (s *Server) handle(w http.ResponseWriter, req uc.RequestGetter) *response {
 	if len(dataMime) > 0 {
 		if dataMime != constant.MultipartFormData && !dataHasParser && req.Method() != "PUT" && req.Method() != "HEAD" && req.Method() != "OPTIONS" {
 			s.logger.Debug("Request contains unsupported Media Type:" + dataMime)
-			return r.respond(415, "HTTP 415 - Unsupported Media Type:", dataMime)
+			return r.Respond(415, "HTTP 415 - Unsupported Media Type:", dataMime)
 		}
 	}
 
@@ -916,7 +175,7 @@ func (s *Server) handle(w http.ResponseWriter, req uc.RequestGetter) *response {
 		contentType, err = acceptList.Negotiate(mime.SerializerMimes...)
 		if err != nil {
 			s.logger.Debug("Accept type not acceptable: " + err.Error())
-			return r.respond(406, "HTTP 406 - Accept type not acceptable: "+err.Error())
+			return r.Respond(406, "HTTP 406 - Accept type not acceptable: "+err.Error())
 		}
 		//req.AcceptType = contentType // todo : not used ?
 	}
@@ -932,67 +191,25 @@ func (s *Server) handle(w http.ResponseWriter, req uc.RequestGetter) *response {
 
 	switch req.Method() {
 	case "OPTIONS":
-		return s.Options(req, resource)
+		return s.i.Options(req, resource)
 	case "GET", "HEAD":
-		return s.GetHead(req, resource, contentType, acl)
+		return s.i.GetHead(req, resource, contentType, acl)
 	case "PATCH":
-		return s.Patch(req, resource, dataHasParser, dataMime, acl)
+		return s.i.Patch(req, resource, dataHasParser, dataMime, acl)
 	case "POST":
-		return s.Post(req, resource, dataHasParser, dataMime, acl)
+		return s.i.Post(req, resource, dataHasParser, dataMime, acl)
 	case "PUT":
-		return s.Put(req, resource, acl)
+		return s.i.Put(req, resource, acl)
 	case "DELETE":
-		return s.Delete(req, resource, acl)
+		return s.i.Delete(req, resource, acl)
 	case "MKCOL":
-		return s.MkCol(req, resource, acl)
+		return s.i.MkCol(req, resource, acl)
 	//case "COPY", "MOVE", "LOCK", "UNLOCK":
 	//	s.CopyMoveLockUnlock(w, req, resource, acl)
 	default:
-		return r.respond(405, "405 - Method Not Allowed:", req.Method)
+		return r.Respond(405, "405 - Method Not Allowed:", req.Method)
 	}
 	return r
-}
-
-type jsonPatch map[string]map[string][]struct {
-	Value string `json:"value"`
-	Type  string `json:"type"`
-}
-
-// JSONPatch is used to perform a PATCH operation on a Graph using data from the reader
-func (Server) JSONPatch(g *domain.Graph, r io.Reader) error {
-	v := make(jsonPatch)
-	data, err := ioutil.ReadAll(r)
-	if err != nil {
-		return err
-	}
-
-	if err := json.Unmarshal(data, &v); err != nil {
-		return err
-	}
-
-	base, _ := url.Parse(g.URI())
-	for s, sv := range v {
-		su, _ := base.Parse(s)
-		for p, pv := range sv {
-			pu, _ := base.Parse(p)
-			subject := domain.NewResource(su.String())
-			predicate := domain.NewResource(pu.String())
-			for _, triple := range g.All(subject, predicate, nil) {
-				g.Remove(triple)
-			}
-			for _, o := range pv {
-				switch o.Type {
-				case "uri":
-					g.AddTriple(subject, predicate, domain.NewResource(o.Value))
-				case "literal":
-					g.AddTriple(subject, predicate, domain.NewLiteral(o.Value))
-				default:
-					//todo check this : do nothing ??
-				}
-			}
-		}
-	}
-	return nil
 }
 
 func isLocal(host string) bool {

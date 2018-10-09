@@ -320,7 +320,7 @@ func AddProfileKeys(uri string, g *domain.Graph) (*domain.Graph, *rsa.PrivateKey
 
 // AddCertKeys adds the modulus and exponent values to the profile document
 func (s *Server) AddCertKeys(uri string, mod string, exp string) error {
-	uuid := NewUUID()
+	uuid := s.uuidGen.UUID()
 	uuid = uuid[:4]
 
 	profileURI := strings.Split(uri, "#")[0]

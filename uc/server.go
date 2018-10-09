@@ -1,16 +1,63 @@
-package gold
+package uc
 
 import (
-	"bytes"
-	"crypto/md5"
-	"crypto/rand"
-	"encoding/hex"
-	"fmt"
-	"io"
-	"io/ioutil"
-	"os"
 	"strings"
+
+	"github.com/err0r500/go-solid-server/domain"
 )
+
+type LogicHandler interface {
+	Delete(req SafeRequestGetter, resource *domain.PathInfo, acl WAC) *Response
+	GetHead(req RequestGetter, resource *domain.PathInfo, contentType string, acl WAC) *Response
+	MkCol(req SafeRequestGetter, resource *domain.PathInfo, acl WAC) *Response
+	Options(req SafeRequestGetter, resource *domain.PathInfo) *Response
+	Patch(req SafeRequestGetter, resource *domain.PathInfo, dataHasParser bool, dataMime string, acl WAC) *Response
+	Post(req SafeRequestGetter, resource *domain.PathInfo, dataHasParser bool, dataMime string, acl WAC) *Response
+	Put(req RequestGetter, resource *domain.PathInfo, acl WAC) *Response
+
+	AllowRead(acl WAC, origin, path string) (int, error) // fixme unify the interface
+	AllowWrite(acl WAC, origin, path string) (int, error)
+	AllowControl(acl WAC, origin, path string) (int, error)
+	AllowAppend(acl WAC, origin, path string) (int, error)
+	VerifyDelegator(delegator string, delegatee string) bool
+}
+
+// Interactor object contains http handler, root where the data is found and whether it uses vhosts or not
+type Interactor struct {
+	Config domain.ServerConfig
+
+	cookieManager  CookieManager
+	logger         Debug
+	fileHandler    FilesHandler
+	httpCaller     HttpCaller
+	mailer         Mailer
+	pathInformer   PathInformer
+	parser         Encoder
+	sparqlHandler  SparqlHandler
+	templater      Templater
+	tokenStorer    TokenStorer
+	uriManipulator URIManipulator
+	ldpcHandler    LDPCHandler
+	uuidGenerator  UUIDGenerator
+	authorizer     ACL
+}
+
+func (s Interactor) handleStatusText(status int, err error) string {
+	switch status {
+	case 200:
+		return "HTTP 200 - OK"
+	case 401:
+		return s.templater.Unauthenticated()
+	case 403:
+		return s.templater.Unauthorized()
+	case 404:
+		return "HTTP 404 - Not found\n\n" + err.Error()
+	case 500:
+		return "HTTP 500 - Internal Server Error\n\n" + err.Error()
+	default:
+		return "HTTP 501 - Not implemented\n\n" + err.Error()
+	}
+}
 
 type linkheader struct {
 	uri string
@@ -46,17 +93,13 @@ func ParsePreferHeader(header string) *Preferheaders {
 					s = strings.TrimLeft(s, "omit=")
 					s = strings.TrimLeft(s, "\"")
 					s = strings.TrimRight(s, "\"")
-					for _, u := range strings.Split(s, " ") {
-						item.omit = append(item.omit, u)
-					}
+					item.omit = append(item.omit, strings.Split(s, " ")...)
 				}
 				if strings.HasPrefix(s, "include") {
 					s = strings.TrimLeft(s, "include=")
 					s = strings.TrimLeft(s, "\"")
 					s = strings.TrimRight(s, "\"")
-					for _, u := range strings.Split(s, " ") {
-						item.include = append(item.include, u)
-					}
+					item.include = append(item.include, strings.Split(s, " ")...)
 				}
 			}
 			ret.headers = append(ret.headers, item)
@@ -70,9 +113,7 @@ func ParsePreferHeader(header string) *Preferheaders {
 func (p *Preferheaders) Omits() []string {
 	var ret []string
 	for _, v := range p.headers {
-		for _, u := range v.omit {
-			ret = append(ret, u)
-		}
+		ret = append(ret, v.omit...)
 	}
 	return ret
 }
@@ -81,9 +122,7 @@ func (p *Preferheaders) Omits() []string {
 func (p *Preferheaders) Includes() []string {
 	var ret []string
 	for _, v := range p.headers {
-		for _, u := range v.include {
-			ret = append(ret, u)
-		}
+		ret = append(ret, v.include...)
 	}
 	return ret
 }
@@ -100,7 +139,7 @@ func ParseLinkHeader(header string) *Linkheaders {
 				s = strings.TrimLeft(s, "<")
 				s = strings.TrimRight(s, ">")
 				item.uri = s
-			} else if strings.Index(s, "rel=") >= 0 {
+			} else if strings.Contains(s, "rel=") {
 				s = strings.TrimLeft(s, "rel=")
 
 				if strings.HasPrefix(s, "\"") || strings.HasPrefix(s, "'") {
@@ -135,43 +174,4 @@ func (l *Linkheaders) MatchURI(uri string) bool {
 		}
 	}
 	return false
-}
-
-// NewUUID generates a new UUID string
-func NewUUID() string {
-	uuid := make([]byte, 16)
-	io.ReadFull(rand.Reader, uuid)
-	uuid[8] = uuid[8]&^0xc0 | 0x80
-	uuid[6] = uuid[6]&^0xf0 | 0x40
-	return hex.EncodeToString(uuid)
-}
-
-// NewETag generates ETag
-func NewETag(path string) (string, error) {
-	var (
-		hash []byte
-		md5s string
-		err  error
-	)
-	stat, err := os.Stat(path)
-	if err != nil {
-		return "", err
-	}
-	if stat.IsDir() {
-		if files, err := ioutil.ReadDir(path); err == nil {
-			if len(files) == 0 {
-				md5s += stat.ModTime().String()
-			}
-			for _, file := range files {
-				md5s += file.ModTime().String() + fmt.Sprintf("%d", file.Size())
-			}
-		}
-	} else {
-		md5s += stat.ModTime().String() + fmt.Sprintf("%d", stat.Size())
-	}
-	h := md5.New()
-	io.Copy(h, bytes.NewBufferString(md5s))
-	hash = h.Sum([]byte(""))
-
-	return hex.EncodeToString(hash), err
 }

@@ -2,8 +2,13 @@ package resources
 
 import (
 	"bufio"
+	"bytes"
+	"crypto/md5"
+	"encoding/hex"
 	"errors"
+	"fmt"
 	"io"
+	"io/ioutil"
 	"log"
 	"os"
 
@@ -38,6 +43,10 @@ func (origFilesHandler) SaveFiles(folder string, files map[string]io.Reader) err
 	}
 
 	return nil
+}
+
+func (origFilesHandler) GetFileContent(path string) ([]byte, error) {
+	return ioutil.ReadFile(path)
 }
 
 // SaveGraph is used to dump RDF from a Graph into a file
@@ -194,4 +203,34 @@ func saveFile(path string, reader io.Reader) error {
 	}
 
 	return nil
+}
+
+// NewETag generates ETag
+func (origFilesHandler) NewETag(path string) (string, error) {
+	var (
+		hash []byte
+		md5s string
+		err  error
+	)
+	stat, err := os.Stat(path)
+	if err != nil {
+		return "", err
+	}
+	if stat.IsDir() {
+		if files, err := ioutil.ReadDir(path); err == nil {
+			if len(files) == 0 {
+				md5s += stat.ModTime().String()
+			}
+			for _, file := range files {
+				md5s += file.ModTime().String() + fmt.Sprintf("%d", file.Size())
+			}
+		}
+	} else {
+		md5s += stat.ModTime().String() + fmt.Sprintf("%d", stat.Size())
+	}
+	h := md5.New()
+	io.Copy(h, bytes.NewBufferString(md5s))
+	hash = h.Sum([]byte(""))
+
+	return hex.EncodeToString(hash), err
 }

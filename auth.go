@@ -60,7 +60,7 @@ func (s *Server) authn(req uc.RequestGetter, w http.ResponseWriter) string {
 	if len(user) > 0 {
 		if len(req.Header("On-Behalf-Of")) > 0 {
 			delegator := s.uriManipulator.Debrack(req.Header("On-Behalf-Of"))
-			if s.VerifyDelegator(delegator, user) {
+			if s.i.VerifyDelegator(delegator, user) {
 				//req.Server.debug.Println("Setting delegation user to:", delegator)
 				user = delegator
 			}
@@ -69,9 +69,8 @@ func (s *Server) authn(req uc.RequestGetter, w http.ResponseWriter) string {
 		return user
 	}
 
-	user = ""
 	//req.Server.debug.Println("Unauthenticated User")
-	return user
+	return ""
 }
 
 func (s *Server) userCookie(req uc.SafeRequestGetter) (string, error) {
@@ -251,7 +250,7 @@ func IsTokenDateValid(valid string) error {
 	}
 
 	if time.Now().Local().Unix() > v {
-		return errors.New("Token has expired!")
+		return errors.New("token has expired")
 	}
 
 	return nil
@@ -280,9 +279,7 @@ func (s *Server) GetAuthzFromToken(token string, user string, req uc.SafeRequest
 }
 
 func saltedPassword(salt, pass string) string {
-	s := sha256.Sum256([]byte(salt + pass))
-	toString := fmt.Sprintf("%x", s)
-	return toString
+	return fmt.Sprintf("%x", sha256.Sum256([]byte(salt+pass)))
 }
 
 func encodeQuery(s string) string {

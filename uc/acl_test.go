@@ -1,5 +1,5 @@
 // TODO: test acl with glob
-package gold_test
+package uc_test
 
 //
 //const (

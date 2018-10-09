@@ -69,6 +69,7 @@ type URIManipulator interface {
 	Debrack(s string) string
 	Defrag(s string) string
 	Unquote(s string) string
+	ParseBearerAuthorizationHeader(header string) (string, error)
 }
 
 type PathInformer interface {
@@ -149,4 +150,9 @@ type LDPCHandler interface {
 
 type UUIDGenerator interface {
 	UUID() string
+}
+
+type Authenticator interface {
+	WebIDDigestAuth(req SafeRequestGetter) (string, error)
+	WebIDTLSAuth(tls RequestGetter) (string, error)
 }

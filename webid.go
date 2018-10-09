@@ -1,33 +1,45 @@
 package gold
 
 import (
-	"crypto/rand"
-	"crypto/rsa"
-	"crypto/sha1"
-	"crypto/tls"
-	"crypto/x509"
-	"encoding/asn1"
-	"encoding/base64"
-	"errors"
-	"fmt"
 	"os"
-	_path "path"
-	"strconv"
 	"strings"
-	"sync"
 	"time"
-	"unicode"
 
-	"github.com/err0r500/go-solid-server/uc"
+	_path "path"
 
 	"github.com/err0r500/go-solid-server/constant"
 	"github.com/err0r500/go-solid-server/domain"
 )
 
-const (
-	rsaBits = 2048
-)
-
+//
+//import (
+//	"crypto/rand"
+//	"crypto/rsa"
+//	"crypto/sha1"
+//	"crypto/tls"
+//	"crypto/x509"
+//	"encoding/asn1"
+//	"encoding/base64"
+//	"errors"
+//	"fmt"
+//	"os"
+//	_path "path"
+//	"strconv"
+//	"strings"
+//	"sync"
+//	"time"
+//	"unicode"
+//
+//	"github.com/err0r500/go-solid-server/uc"
+//
+//	"github.com/err0r500/go-solid-server/constant"
+//	"github.com/err0r500/go-solid-server/domain"
+//)
+//
+//const (
+//	rsaBits = 2048
+//)
+//
 type webidAccount struct {
 	Root          string
 	BaseURI       string
@@ -50,273 +62,277 @@ type workspace struct {
 	Type  string
 }
 
-var (
-	subjectAltName = []int{2, 5, 29, 17}
-
-	notBefore = time.Date(2000, 1, 1, 0, 0, 0, 0, time.UTC)
-	notAfter  = time.Date(2049, 12, 31, 23, 59, 59, 0, time.UTC)
-
-	workspaces = []workspace{
+//
+//var (
+//	subjectAltName = []int{2, 5, 29, 17}
+//
+//	notBefore = time.Date(2000, 1, 1, 0, 0, 0, 0, time.UTC)
+//	notAfter  = time.Date(2049, 12, 31, 23, 59, 59, 0, time.UTC)
+//
+func workspaces() []workspace {
+	return []workspace{
 		{Name: "Preferences", Label: "Preferences workspace", Type: ""},
 		{Name: "Applications", Label: "Applications workspace", Type: "PreferencesWorkspace"},
 		{Name: "Inbox", Label: "Inbox", Type: ""},
 	}
-
-	// cache
-	webidL  = new(sync.Mutex)
-	pkeyURI = map[string]string{}
-)
-
-func pkeyTypeNE(pkey interface{}) (t, n, e string) {
-	switch pkey := pkey.(type) {
-	//TODO: case *dsa.PublicKey
-	case *rsa.PublicKey:
-		t = "RSAPublicKey"
-		n = fmt.Sprintf("%x", pkey.N)
-		e = fmt.Sprintf("%d", pkey.E)
-	}
-	return
 }
 
-// WebIDDigestAuth performs a digest authentication using WebID-RSA
-func (s *Server) WebIDDigestAuth(req uc.SafeRequestGetter) (string, error) {
-	if len(req.Header(constant.HAuthorization)) == 0 {
-		return "", nil
-	}
-
-	authH, err := ParseDigestAuthorizationHeader(req.Header(constant.HAuthorization))
-	if err != nil {
-		return "", err
-	}
-
-	if len(authH.Source) == 0 || authH.Source != req.BaseURI() {
-		return "", errors.New("Bad source URI for auth token: " + authH.Source + " -- possible MITM attack!")
-	}
-
-	claim := sha1.Sum([]byte(authH.Source + authH.Username + authH.Nonce))
-	signature, err := base64.StdEncoding.DecodeString(authH.Signature)
-	if err != nil {
-		return "", errors.New(err.Error() + " in " + authH.Signature)
-	}
-
-	if len(authH.Username) == 0 || len(claim) == 0 || len(signature) == 0 {
-		return "", errors.New("No WebID and/or claim found in the HAuthorization header.\n" + req.Header(constant.HAuthorization))
-	}
-
-	// fetch WebID to get pubKey
-	if !strings.HasPrefix(authH.Username, "http") {
-		return "", errors.New("Username is not a valid HTTP URI: " + authH.Username)
-	}
-
-	// Decrypt and validate nonce from secure token
-	tValues, err := s.ValidateSecureToken("WWW-Authenticate", authH.Nonce)
-	if err != nil {
-		return "", err
-	}
-	v, err := strconv.ParseInt(tValues["valid"], 10, 64)
-	if err != nil {
-		return "", err
-	}
-	if time.Now().Local().Unix() > v {
-		return "", errors.New("Token expired for " + authH.Username)
-	}
-	if len(tValues["secret"]) == 0 {
-		return "", errors.New("Missing secret from token (tempered with?)")
-	}
-	if err := s.cookieManager.Check(tValues["secret"]); err != nil {
-		return "", err
-	}
-
-	g := domain.NewGraph(authH.Username)
-	err = s.httpCaller.LoadURI(g, authH.Username)
-	if err != nil {
-		return "", err
-	}
-
-	//req.debug.Println("Checking for public keys for user", authH.Username)
-	for _, keyT := range g.All(domain.NewResource(authH.Username), domain.NewNS("cert").Get("key"), nil) {
-		for range g.All(keyT.Object, domain.NewNS("rdf").Get("type"), domain.NewNS("cert").Get("RSAPublicKey")) {
-			//req.debug.Println("Found RSA key in user's profile", keyT.Object.String())
-			for _, pubP := range g.All(keyT.Object, domain.NewNS("cert").Get("pem"), nil) {
-				keyP := s.rdfHandler.FromDomain(pubP.Object).String()
-				//req.debug.Println("Found matching public key in user's profile", keyP[:10], "...", keyP[len(keyP)-10:len(keyP)])
-				parser, err := ParseRSAPublicPEMKey([]byte(keyP))
-				if err == nil {
-					err = parser.Verify(claim[:], signature)
-					if err == nil {
-						return authH.Username, nil
-					}
-				}
-				//req.debug.Println("Unable to verify signature with key", keyP[:10], "...", keyP[len(keyP)-10:len(keyP)], "-- reason:", err)
-			}
-			// also loop through modulus/exp
-			for _, pubN := range g.All(keyT.Object, domain.NewNS("cert").Get("modulus"), nil) {
-				keyN := s.rdfHandler.FromDomain(pubN.Object).String()
-				for _, pubE := range g.All(keyT.Object, domain.NewNS("cert").Get("exponent"), nil) {
-					keyE := s.rdfHandler.FromDomain(pubE.Object).String()
-					//req.debug.Println("Found matching modulus and exponent in user's profile", keyN[:10], "...", keyN[len(keyN)-10:len(keyN)])
-					parser, err := ParseRSAPublicKeyNE("RSAPublicKey", keyN, keyE)
-					if err == nil {
-						err = parser.Verify(claim[:], signature)
-						if err == nil {
-							return authH.Username, nil
-						}
-					}
-					//req.debug.Println("Unable to verify signature with key", keyN[:10], "...", keyN[len(keyN)-10:len(keyN)], "-- reason:", err)
-				}
-			}
-		}
-	}
-
-	return "", err
-}
-
-// WebIDTLSAuth - performs WebID-TLS authentication
-func (s *Server) WebIDTLSAuth(tls *tls.ConnectionState) (uri string, err error) {
-	claim := ""
-	uri = ""
-	err = nil
-
-	if tls == nil || !tls.HandshakeComplete {
-		return "", errors.New("Not a TLS connection. TLS handshake failed")
-	}
-
-	if len(tls.PeerCertificates) < 1 {
-		return "", errors.New("No client certificate found in the TLS request!")
-	}
-
-	for _, x := range tls.PeerCertificates[0].Extensions {
-		if !x.Id.Equal(subjectAltName) {
-			continue
-		}
-		if len(x.Value) < 5 {
-			continue
-		}
-
-		v := asn1.RawValue{}
-		_, err = asn1.Unmarshal(x.Value, &v)
-		if err == nil {
-			san := ""
-			for _, r := range string(v.Bytes[2:]) {
-				if rune(r) == 65533 {
-					san += ","
-				} else if unicode.IsGraphic(rune(r)) {
-					san += string(r)
-				}
-			}
-			for _, sanURI := range strings.Split(san, ",") {
-				sanURI = strings.TrimSpace(sanURI)
-				if len(sanURI) == 0 {
-					continue
-				}
-				if strings.HasPrefix(sanURI, "URI:") {
-					claim = strings.TrimSpace(sanURI[4:])
-					break
-				} else if strings.HasPrefix(sanURI, "http") {
-					claim = sanURI
-					break
-				}
-			}
-		}
-		if len(claim) == 0 || claim[:4] != "http" {
-			continue
-		}
-
-		pkey := tls.PeerCertificates[0].PublicKey
-		t, n, e := pkeyTypeNE(pkey)
-		if len(t) == 0 {
-			continue
-		}
-
-		pkeyk := fmt.Sprint([]string{t, n, e})
-		webidL.Lock()
-		uri = pkeyURI[pkeyk]
-		webidL.Unlock()
-		if len(uri) > 0 {
-			return
-		}
-
-		// pkey from client contains WebID claim
-
-		g := domain.NewGraph(claim)
-		err = s.httpCaller.LoadURI(g, claim)
-		if err != nil {
-			return "", err
-		}
-
-		for _, keyT := range g.All(domain.NewResource(claim), domain.NewNS("cert").Get("key"), nil) {
-			// found pkey in the profile
-			for range g.All(keyT.Object, domain.NewNS("rdf").Get("type"), domain.NewNS("cert").Get(t)) {
-				for range g.All(keyT.Object, domain.NewNS("cert").Get("modulus"), domain.NewLiteral(n)) {
-					goto matchModulus
-				}
-				for range g.All(keyT.Object, domain.NewNS("cert").Get("modulus"), domain.NewLiteralWithDatatype(n, domain.NewResource("http://www.w3.org/2001/XMLSchema#hexBinary"))) {
-					goto matchModulus
-				}
-			matchModulus:
-				// found a matching modulus in the profile
-				for range g.All(keyT.Object, domain.NewNS("cert").Get("exponent"), domain.NewLiteral(e)) {
-					goto matchExponent
-				}
-				for range g.All(keyT.Object, domain.NewNS("cert").Get("exponent"), domain.NewLiteralWithDatatype(e, domain.NewResource("http://www.w3.org/2001/XMLSchema#int"))) {
-					goto matchExponent
-				}
-			matchExponent:
-				// found a matching exponent in the profile
-				//req.debug.Println("Found matching public modulus and exponent in user's profile")
-				uri = claim
-				webidL.Lock()
-				pkeyURI[pkeyk] = uri
-				webidL.Unlock()
-				return
-			}
-			// could not find a certificate in the profile
-		}
-		// could not find a certificate pkey in the profile
-	}
-	return
-}
-
-// WebIDFromCert returns subjectAltName string from x509 []byte
-func WebIDFromCert(cert []byte) (string, error) {
-	parsed, err := x509.ParseCertificate(cert)
-	if err != nil {
-		return "", err
-	}
-
-	for _, x := range parsed.Extensions {
-		if x.Id.Equal(subjectAltName) {
-			v := asn1.RawValue{}
-			_, err = asn1.Unmarshal(x.Value, &v)
-			if err != nil {
-				return "", err
-			}
-			return string(v.Bytes[2:]), nil
-		}
-	}
-	return "", nil
-}
-
-// AddProfileKeys creates a WebID profile graph and corresponding keys
-func AddProfileKeys(uri string, g *domain.Graph) (*domain.Graph, *rsa.PrivateKey, *rsa.PublicKey, error) {
-	priv, err := rsa.GenerateKey(rand.Reader, rsaBits)
-	if err != nil {
-		return nil, nil, nil, err
-	}
-	pub := &priv.PublicKey
-
-	profileURI := strings.Split(uri, "#")[0]
-	userTerm := domain.NewResource(uri)
-	keyTerm := domain.NewResource(profileURI + "#key")
-
-	g.AddTriple(userTerm, domain.NewNS("cert").Get("key"), keyTerm)
-	g.AddTriple(keyTerm, domain.NewNS("rdf").Get("type"), domain.NewNS("cert").Get("RSAPublicKey"))
-	g.AddTriple(keyTerm, domain.NewNS("dct").Get("title"), domain.NewLiteral("Created  "+time.Now().Format(time.RFC822)))
-	g.AddTriple(keyTerm, domain.NewNS("cert").Get("modulus"), domain.NewLiteralWithDatatype(fmt.Sprintf("%x", pub.N), domain.NewResource("http://www.w3.org/2001/XMLSchema#hexBinary")))
-	g.AddTriple(keyTerm, domain.NewNS("cert").Get("exponent"), domain.NewLiteralWithDatatype(fmt.Sprintf("%d", pub.E), domain.NewResource("http://www.w3.org/2001/XMLSchema#int")))
-
-	return g, priv, pub, nil
-}
+//
+//	// cache
+//	webidL  = new(sync.Mutex)
+//	pkeyURI = map[string]string{}
+//)
+//
+//func pkeyTypeNE(pkey interface{}) (t, n, e string) {
+//	switch pkey := pkey.(type) {
+//	//TODO: case *dsa.PublicKey
+//	case *rsa.PublicKey:
+//		t = "RSAPublicKey"
+//		n = fmt.Sprintf("%x", pkey.N)
+//		e = fmt.Sprintf("%d", pkey.E)
+//	}
+//	return
+//}
+//
+//// WebIDDigestAuth performs a digest authentication using WebID-RSA
+//func (s *Server) WebIDDigestAuth(req uc.SafeRequestGetter) (string, error) {
+//	if len(req.Header(constant.HAuthorization)) == 0 {
+//		return "", nil
+//	}
+//
+//	authH, err := ParseDigestAuthorizationHeader(req.Header(constant.HAuthorization))
+//	if err != nil {
+//		return "", err
+//	}
+//
+//	if len(authH.Source) == 0 || authH.Source != req.BaseURI() {
+//		return "", errors.New("Bad source URI for auth token: " + authH.Source + " -- possible MITM attack!")
+//	}
+//
+//	claim := sha1.Sum([]byte(authH.Source + authH.Username + authH.Nonce))
+//	signature, err := base64.StdEncoding.DecodeString(authH.Signature)
+//	if err != nil {
+//		return "", errors.New(err.Error() + " in " + authH.Signature)
+//	}
+//
+//	if len(authH.Username) == 0 || len(claim) == 0 || len(signature) == 0 {
+//		return "", errors.New("No WebID and/or claim found in the HAuthorization header.\n" + req.Header(constant.HAuthorization))
+//	}
+//
+//	// fetch WebID to get pubKey
+//	if !strings.HasPrefix(authH.Username, "http") {
+//		return "", errors.New("Username is not a valid HTTP URI: " + authH.Username)
+//	}
+//
+//	// Decrypt and validate nonce from secure token
+//	tValues, err := s.ValidateSecureToken("WWW-Authenticate", authH.Nonce)
+//	if err != nil {
+//		return "", err
+//	}
+//	v, err := strconv.ParseInt(tValues["valid"], 10, 64)
+//	if err != nil {
+//		return "", err
+//	}
+//	if time.Now().Local().Unix() > v {
+//		return "", errors.New("Token expired for " + authH.Username)
+//	}
+//	if len(tValues["secret"]) == 0 {
+//		return "", errors.New("Missing secret from token (tempered with?)")
+//	}
+//	if err := s.cookieManager.Check(tValues["secret"]); err != nil {
+//		return "", err
+//	}
+//
+//	g := domain.NewGraph(authH.Username)
+//	err = s.httpCaller.LoadURI(g, authH.Username)
+//	if err != nil {
+//		return "", err
+//	}
+//
+//	//req.debug.Println("Checking for public keys for user", authH.Username)
+//	for _, keyT := range g.All(domain.NewResource(authH.Username), domain.NewNS("cert").Get("key"), nil) {
+//		for range g.All(keyT.Object, domain.NewNS("rdf").Get("type"), domain.NewNS("cert").Get("RSAPublicKey")) {
+//			//req.debug.Println("Found RSA key in user's profile", keyT.Object.String())
+//			for _, pubP := range g.All(keyT.Object, domain.NewNS("cert").Get("pem"), nil) {
+//				keyP := s.rdfHandler.FromDomain(pubP.Object).String()
+//				//req.debug.Println("Found matching public key in user's profile", keyP[:10], "...", keyP[len(keyP)-10:len(keyP)])
+//				parser, err := ParseRSAPublicPEMKey([]byte(keyP))
+//				if err == nil {
+//					err = parser.Verify(claim[:], signature)
+//					if err == nil {
+//						return authH.Username, nil
+//					}
+//				}
+//				//req.debug.Println("Unable to verify signature with key", keyP[:10], "...", keyP[len(keyP)-10:len(keyP)], "-- reason:", err)
+//			}
+//			// also loop through modulus/exp
+//			for _, pubN := range g.All(keyT.Object, domain.NewNS("cert").Get("modulus"), nil) {
+//				keyN := s.rdfHandler.FromDomain(pubN.Object).String()
+//				for _, pubE := range g.All(keyT.Object, domain.NewNS("cert").Get("exponent"), nil) {
+//					keyE := s.rdfHandler.FromDomain(pubE.Object).String()
+//					//req.debug.Println("Found matching modulus and exponent in user's profile", keyN[:10], "...", keyN[len(keyN)-10:len(keyN)])
+//					parser, err := ParseRSAPublicKeyNE("RSAPublicKey", keyN, keyE)
+//					if err == nil {
+//						err = parser.Verify(claim[:], signature)
+//						if err == nil {
+//							return authH.Username, nil
+//						}
+//					}
+//					//req.debug.Println("Unable to verify signature with key", keyN[:10], "...", keyN[len(keyN)-10:len(keyN)], "-- reason:", err)
+//				}
+//			}
+//		}
+//	}
+//
+//	return "", err
+//}
+//
+//// WebIDTLSAuth - performs WebID-TLS authentication
+//func (s *Server) WebIDTLSAuth(tls *tls.ConnectionState) (uri string, err error) {
+//	claim := ""
+//	uri = ""
+//	err = nil
+//
+//	if tls == nil || !tls.HandshakeComplete {
+//		return "", errors.New("Not a TLS connection. TLS handshake failed")
+//	}
+//
+//	if len(tls.PeerCertificates) < 1 {
+//		return "", errors.New("No client certificate found in the TLS request!")
+//	}
+//
+//	for _, x := range tls.PeerCertificates[0].Extensions {
+//		if !x.Id.Equal(subjectAltName) {
+//			continue
+//		}
+//		if len(x.Value) < 5 {
+//			continue
+//		}
+//
+//		v := asn1.RawValue{}
+//		_, err = asn1.Unmarshal(x.Value, &v)
+//		if err == nil {
+//			san := ""
+//			for _, r := range string(v.Bytes[2:]) {
+//				if rune(r) == 65533 {
+//					san += ","
+//				} else if unicode.IsGraphic(rune(r)) {
+//					san += string(r)
+//				}
+//			}
+//			for _, sanURI := range strings.Split(san, ",") {
+//				sanURI = strings.TrimSpace(sanURI)
+//				if len(sanURI) == 0 {
+//					continue
+//				}
+//				if strings.HasPrefix(sanURI, "URI:") {
+//					claim = strings.TrimSpace(sanURI[4:])
+//					break
+//				} else if strings.HasPrefix(sanURI, "http") {
+//					claim = sanURI
+//					break
+//				}
+//			}
+//		}
+//		if len(claim) == 0 || claim[:4] != "http" {
+//			continue
+//		}
+//
+//		pkey := tls.PeerCertificates[0].PublicKey
+//		t, n, e := pkeyTypeNE(pkey)
+//		if len(t) == 0 {
+//			continue
+//		}
+//
+//		pkeyk := fmt.Sprint([]string{t, n, e})
+//		webidL.Lock()
+//		uri = pkeyURI[pkeyk]
+//		webidL.Unlock()
+//		if len(uri) > 0 {
+//			return
+//		}
+//
+//		// pkey from client contains WebID claim
+//
+//		g := domain.NewGraph(claim)
+//		err = s.httpCaller.LoadURI(g, claim)
+//		if err != nil {
+//			return "", err
+//		}
+//
+//		for _, keyT := range g.All(domain.NewResource(claim), domain.NewNS("cert").Get("key"), nil) {
+//			// found pkey in the profile
+//			for range g.All(keyT.Object, domain.NewNS("rdf").Get("type"), domain.NewNS("cert").Get(t)) {
+//				for range g.All(keyT.Object, domain.NewNS("cert").Get("modulus"), domain.NewLiteral(n)) {
+//					goto matchModulus
+//				}
+//				for range g.All(keyT.Object, domain.NewNS("cert").Get("modulus"), domain.NewLiteralWithDatatype(n, domain.NewResource("http://www.w3.org/2001/XMLSchema#hexBinary"))) {
+//					goto matchModulus
+//				}
+//			matchModulus:
+//				// found a matching modulus in the profile
+//				for range g.All(keyT.Object, domain.NewNS("cert").Get("exponent"), domain.NewLiteral(e)) {
+//					goto matchExponent
+//				}
+//				for range g.All(keyT.Object, domain.NewNS("cert").Get("exponent"), domain.NewLiteralWithDatatype(e, domain.NewResource("http://www.w3.org/2001/XMLSchema#int"))) {
+//					goto matchExponent
+//				}
+//			matchExponent:
+//				// found a matching exponent in the profile
+//				//req.debug.Println("Found matching public modulus and exponent in user's profile")
+//				uri = claim
+//				webidL.Lock()
+//				pkeyURI[pkeyk] = uri
+//				webidL.Unlock()
+//				return
+//			}
+//			// could not find a certificate in the profile
+//		}
+//		// could not find a certificate pkey in the profile
+//	}
+//	return
+//}
+//
+//// WebIDFromCert returns subjectAltName string from x509 []byte
+//func WebIDFromCert(cert []byte) (string, error) {
+//	parsed, err := x509.ParseCertificate(cert)
+//	if err != nil {
+//		return "", err
+//	}
+//
+//	for _, x := range parsed.Extensions {
+//		if x.Id.Equal(subjectAltName) {
+//			v := asn1.RawValue{}
+//			_, err = asn1.Unmarshal(x.Value, &v)
+//			if err != nil {
+//				return "", err
+//			}
+//			return string(v.Bytes[2:]), nil
+//		}
+//	}
+//	return "", nil
+//}
+//
+//// AddProfileKeys creates a WebID profile graph and corresponding keys
+//func AddProfileKeys(uri string, g *domain.Graph) (*domain.Graph, *rsa.PrivateKey, *rsa.PublicKey, error) {
+//	priv, err := rsa.GenerateKey(rand.Reader, rsaBits)
+//	if err != nil {
+//		return nil, nil, nil, err
+//	}
+//	pub := &priv.PublicKey
+//
+//	profileURI := strings.Split(uri, "#")[0]
+//	userTerm := domain.NewResource(uri)
+//	keyTerm := domain.NewResource(profileURI + "#key")
+//
+//	g.AddTriple(userTerm, domain.NewNS("cert").Get("key"), keyTerm)
+//	g.AddTriple(keyTerm, domain.NewNS("rdf").Get("type"), domain.NewNS("cert").Get("RSAPublicKey"))
+//	g.AddTriple(keyTerm, domain.NewNS("dct").Get("title"), domain.NewLiteral("Created  "+time.Now().Format(time.RFC822)))
+//	g.AddTriple(keyTerm, domain.NewNS("cert").Get("modulus"), domain.NewLiteralWithDatatype(fmt.Sprintf("%x", pub.N), domain.NewResource("http://www.w3.org/2001/XMLSchema#hexBinary")))
+//	g.AddTriple(keyTerm, domain.NewNS("cert").Get("exponent"), domain.NewLiteralWithDatatype(fmt.Sprintf("%d", pub.E), domain.NewResource("http://www.w3.org/2001/XMLSchema#int")))
+//
+//	return g, priv, pub, nil
+//}
 
 // AddCertKeys adds the modulus and exponent values to the profile document
 func (s *Server) AddCertKeys(uri string, mod string, exp string) error {
@@ -429,7 +445,7 @@ func (s *Server) AddWorkspaces(account webidAccount, containsEmail bool, g *doma
 	pref.AddTriple(domain.NewResource(account.WebID), domain.NewNS("space").Get("preferencesFile"), domain.NewResource(account.PrefURI))
 	pref.AddTriple(domain.NewResource(account.WebID), domain.NewNS("rdf").Get("type"), domain.NewNS("foaf").Get("Person"))
 
-	for _, ws := range workspaces {
+	for _, ws := range workspaces() {
 		resource, _ := s.pathInformer.GetPathInfo(account.BaseURI + "/" + ws.Name + "/")
 		err := os.MkdirAll(resource.File, 0755)
 		if err != nil {

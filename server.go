@@ -122,8 +122,19 @@ func (s *Server) handle(w http.ResponseWriter, req uc.RequestGetter) *uc.Respons
 	w.Header().Set("Updates-Via", "wss://"+req.Host()+"/")
 
 	// Authentication
-	user := s.authn(req, w)
-	w.Header().Set("User", user)
+	user := s.i.Authenticate(req)
+	if user != "" {
+		if len(req.Header("On-Behalf-Of")) > 0 {
+			delegator := s.uriManipulator.Debrack(req.Header("On-Behalf-Of"))
+			if s.i.VerifyDelegator(delegator, user) {
+				s.logger.Debug("Setting delegation user to:", delegator)
+				user = delegator
+			}
+		}
+		w.Header().Set("User", user)
+		s.userCookieSet(w, user)
+	}
+
 	acl := uc.NewWAC(user, req.FormValue("key"))
 
 	// check if is owner
@@ -245,7 +256,7 @@ func (s *Server) ProxyReq(w http.ResponseWriter, req uc.SafeRequestGetter, reqUr
 	}
 
 	if len(req.Header(constant.HAuthorization)) > 0 {
-		token, err := ParseBearerAuthorizationHeader(req.Header(constant.HAuthorization))
+		token, err := s.uriManipulator.ParseBearerAuthorizationHeader(req.Header(constant.HAuthorization))
 		if err != nil {
 			s.logger.Debug(err.Error())
 		}

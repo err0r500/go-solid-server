@@ -2,8 +2,8 @@ package gold
 
 import (
 	"bytes"
-	// "crypto/ecdsa"
-	// "crypto/elliptic"
+	"time"
+
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/sha1"
@@ -15,6 +15,12 @@ import (
 	"encoding/pem"
 	"errors"
 	"math/big"
+)
+
+var (
+	notBefore      = time.Date(2000, 1, 1, 0, 0, 0, 0, time.UTC)
+	notAfter       = time.Date(2049, 12, 31, 23, 59, 59, 0, time.UTC)
+	subjectAltName = []int{2, 5, 29, 17}
 )
 
 type pkacInfo struct {

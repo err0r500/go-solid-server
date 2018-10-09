@@ -20,6 +20,7 @@ type LogicHandler interface {
 	AllowControl(acl WAC, origin, path string) (int, error)
 	AllowAppend(acl WAC, origin, path string) (int, error)
 	VerifyDelegator(delegator string, delegatee string) bool
+	Authenticate(getter RequestGetter) string
 }
 
 // Interactor object contains http handler, root where the data is found and whether it uses vhosts or not
@@ -40,6 +41,7 @@ type Interactor struct {
 	ldpcHandler    LDPCHandler
 	uuidGenerator  UUIDGenerator
 	authorizer     ACL
+	authenticator  Authenticator
 }
 
 func (s Interactor) handleStatusText(status int, err error) string {

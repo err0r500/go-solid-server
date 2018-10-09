@@ -1,6 +1,10 @@
 package domain
 
-import "strings"
+import (
+	"errors"
+	"net/url"
+	"strings"
+)
 
 type URIHandler struct{}
 
@@ -46,6 +50,23 @@ func (URIHandler) Unquote(s string) string {
 		return s
 	}
 	return s[1 : len(s)-1]
+}
+
+func (URIHandler) ParseBearerAuthorizationHeader(header string) (string, error) {
+	if len(header) == 0 {
+		return "", errors.New("Cannot parse HAuthorization header: no header present")
+	}
+
+	parts := strings.SplitN(header, " ", 2)
+	if parts[0] != "Bearer" {
+		return "", errors.New("Not a Bearer header. Got: " + parts[0])
+	}
+	return decodeQuery(parts[1])
+}
+
+// fixme move to its own implementation folder
+func decodeQuery(s string) (string, error) {
+	return url.QueryUnescape(s)
 }
 
 // frag = lambda x: x[x.find('#')==-1 and len(x) or x.find('#'):len(x)-(x[-1]=='>')]

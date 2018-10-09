@@ -40,7 +40,7 @@ func (s Interactor) AllowAppend(acl WAC, origin, path string) (int, error) {
 	return s.allow(acl, origin, appendAccess, path)
 }
 
-// AllowControl checks if Control access is allowed
+// AllowControl checks if Control access is allowed ?
 func (s Interactor) AllowControl(acl WAC, origin, path string) (int, error) {
 	return s.allow(acl, origin, controlAccess, path)
 }

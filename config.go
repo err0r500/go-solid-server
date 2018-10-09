@@ -8,6 +8,13 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/err0r500/go-solid-server/authentication"
+	"github.com/err0r500/go-solid-server/uuid"
+
+	"github.com/err0r500/go-solid-server/sparql"
+
+	"github.com/err0r500/go-solid-server/uc"
+
 	"github.com/boltdb/bolt"
 
 	"github.com/err0r500/go-solid-server/pages"
@@ -41,6 +48,22 @@ func NewServer(config domain.ServerConfig) *Server {
 
 	s := &Server{
 		Config: config,
+		i: uc.NewInteractor(
+			config,
+			cookies.New(),
+			debugger,
+			resources.New(encoder.New()),
+			httpCaller.New(),
+			mail.New(domain.EmailConfig{}),
+			pathInfo.New(config),
+			encoder.New(),
+			sparql.New(),
+			pages.New(config.DataRoot),
+			tokenStorer.New(db),
+			domain.URIHandler{},
+			uuid.New(),
+			authentication.New(httpCaller.New()),
+		),
 
 		cookieManager:  cookies.New(),
 		logger:         debugger,

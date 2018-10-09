@@ -1,11 +1,8 @@
 package gold
 
 import (
-	"os"
 	"strings"
 	"time"
-
-	_path "path"
 
 	"github.com/err0r500/go-solid-server/constant"
 	"github.com/err0r500/go-solid-server/domain"
@@ -156,73 +153,77 @@ func (s *Server) LinkToWebID(account webidAccount) error {
 }
 
 func (s *Server) getAccountWebID(baseURI string) string {
-	resource, err := s.pathInformer.GetPathInfo(baseURI)
-	if err == nil {
-		resource, _ = s.pathInformer.GetPathInfo(resource.Base)
-		g := domain.NewGraph(resource.MetaURI)
-		s.fileHandler.UpdateGraphFromFile(g, s.parser, resource.MetaFile)
-		if g.Len() >= 1 {
-			webid := g.One(nil, domain.NewNS("st").Get("account"), domain.NewResource(resource.MetaURI))
-			if webid != nil {
-				return s.uriManipulator.Debrack(webid.Subject.String())
-			}
-		}
+	baseResource, err := s.pathInformer.GetPathInfo(baseURI)
+	if err != nil {
+		return ""
 	}
 
-	return ""
+	resource, err := s.pathInformer.GetPathInfo(baseResource.Base)
+	if err != nil {
+		return ""
+	}
+
+	g := domain.NewGraph(resource.MetaURI)
+	s.fileHandler.UpdateGraphFromFile(g, s.parser, resource.MetaFile)
+
+	if g.Len() == 0 {
+		return ""
+	}
+
+	webid := g.One(nil, domain.NewNS("st").Get("account"), domain.NewResource(resource.MetaURI))
+	if webid == nil {
+		return ""
+	}
+	return s.uriManipulator.Debrack(webid.Subject.String())
 }
 
 // AddWorkspaces creates all the necessary workspaces corresponding to a new account
 func (s *Server) AddWorkspaces(account webidAccount, containsEmail bool, g *domain.Graph) error {
-	pref := domain.NewGraph(account.PrefURI)
 	prefTerm := domain.NewResource(account.PrefURI)
-	pref.AddTriple(prefTerm, domain.NewNS("rdf").Get("type"), domain.NewNS("space").Get("ConfigurationFile"))
-	pref.AddTriple(prefTerm, domain.NewNS("dct").Get("title"), domain.NewLiteral("Preferences file"))
-
-	pref.AddTriple(domain.NewResource(account.WebID), domain.NewNS("space").Get("preferencesFile"), domain.NewResource(account.PrefURI))
-	pref.AddTriple(domain.NewResource(account.WebID), domain.NewNS("rdf").Get("type"), domain.NewNS("foaf").Get("Person"))
+	pref := domain.NewGraph(account.PrefURI).
+		AddTriple(prefTerm, domain.NewNS("rdf").Get("type"), domain.NewNS("space").Get("ConfigurationFile")).
+		AddTriple(prefTerm, domain.NewNS("dct").Get("title"), domain.NewLiteral("Preferences file")).
+		AddTriple(domain.NewResource(account.WebID), domain.NewNS("space").Get("preferencesFile"), domain.NewResource(account.PrefURI)).
+		AddTriple(domain.NewResource(account.WebID), domain.NewNS("rdf").Get("type"), domain.NewNS("foaf").Get("Person"))
 
 	for _, ws := range workspaces() {
 		resource, _ := s.pathInformer.GetPathInfo(account.BaseURI + "/" + ws.Name + "/")
-		err := os.MkdirAll(resource.File, 0755)
-		if err != nil {
-			return err
-		}
+		s.fileHandler.CreateFileOrDir(resource.File)
 
 		// Write ACLs
 		// No one but the user is allowed access by default
 		aclTerm := domain.NewResource(resource.AclURI + "#owner")
 		wsTerm := domain.NewResource(resource.URI)
-		a := domain.NewGraph(resource.AclURI)
-		a.AddTriple(aclTerm, domain.NewNS("rdf").Get("type"), domain.NewNS("acl").Get(constant.HAuthorization))
-		a.AddTriple(aclTerm, domain.NewNS("acl").Get("accessTo"), wsTerm)
-		a.AddTriple(aclTerm, domain.NewNS("acl").Get("accessTo"), domain.NewResource(resource.AclURI))
-		a.AddTriple(aclTerm, domain.NewNS("acl").Get("agent"), domain.NewResource(account.WebID))
+		a := domain.NewGraph(resource.AclURI).
+			AddTriple(aclTerm, domain.NewNS("rdf").Get("type"), domain.NewNS("acl").Get(constant.HAuthorization)).
+			AddTriple(aclTerm, domain.NewNS("acl").Get("accessTo"), wsTerm).
+			AddTriple(aclTerm, domain.NewNS("acl").Get("accessTo"), domain.NewResource(resource.AclURI)).
+			AddTriple(aclTerm, domain.NewNS("acl").Get("agent"), domain.NewResource(account.WebID))
 		if containsEmail {
 			a.AddTriple(aclTerm, domain.NewNS("acl").Get("agent"), domain.NewResource("mailto:"+account.Email))
 		}
-		a.AddTriple(aclTerm, domain.NewNS("acl").Get("defaultForNew"), wsTerm)
-		a.AddTriple(aclTerm, domain.NewNS("acl").Get("mode"), domain.NewNS("acl").Get("Read"))
-		a.AddTriple(aclTerm, domain.NewNS("acl").Get("mode"), domain.NewNS("acl").Get("Write"))
-		a.AddTriple(aclTerm, domain.NewNS("acl").Get("mode"), domain.NewNS("acl").Get("Control"))
+		a.AddTriple(aclTerm, domain.NewNS("acl").Get("defaultForNew"), wsTerm).
+			AddTriple(aclTerm, domain.NewNS("acl").Get("mode"), domain.NewNS("acl").Get("Read")).
+			AddTriple(aclTerm, domain.NewNS("acl").Get("mode"), domain.NewNS("acl").Get("Write")).
+			AddTriple(aclTerm, domain.NewNS("acl").Get("mode"), domain.NewNS("acl").Get("Control"))
 		if ws.Type == "PublicWorkspace" {
 			readAllTerm := domain.NewResource(resource.AclURI + "#readall")
-			a.AddTriple(readAllTerm, domain.NewNS("rdf").Get("type"), domain.NewNS("acl").Get(constant.HAuthorization))
-			a.AddTriple(readAllTerm, domain.NewNS("acl").Get("accessTo"), wsTerm)
-			a.AddTriple(readAllTerm, domain.NewNS("acl").Get("agentClass"), domain.NewNS("foaf").Get("Agent"))
-			a.AddTriple(readAllTerm, domain.NewNS("acl").Get("mode"), domain.NewNS("acl").Get("Read"))
+			a.AddTriple(readAllTerm, domain.NewNS("rdf").Get("type"), domain.NewNS("acl").Get(constant.HAuthorization)).
+				AddTriple(readAllTerm, domain.NewNS("acl").Get("accessTo"), wsTerm).
+				AddTriple(readAllTerm, domain.NewNS("acl").Get("agentClass"), domain.NewNS("foaf").Get("Agent")).
+				AddTriple(readAllTerm, domain.NewNS("acl").Get("mode"), domain.NewNS("acl").Get("Read"))
 		}
 		// Special case for Inbox (append only)
 		if ws.Name == "Inbox" {
 			appendAllTerm := domain.NewResource(resource.AclURI + "#apendall")
-			a.AddTriple(appendAllTerm, domain.NewNS("rdf").Get("type"), domain.NewNS("acl").Get(constant.HAuthorization))
-			a.AddTriple(appendAllTerm, domain.NewNS("acl").Get("accessTo"), wsTerm)
-			a.AddTriple(appendAllTerm, domain.NewNS("acl").Get("agentClass"), domain.NewNS("foaf").Get("Agent"))
-			a.AddTriple(appendAllTerm, domain.NewNS("acl").Get("mode"), domain.NewNS("acl").Get("Append"))
+			a.AddTriple(appendAllTerm, domain.NewNS("rdf").Get("type"), domain.NewNS("acl").Get(constant.HAuthorization)).
+				AddTriple(appendAllTerm, domain.NewNS("acl").Get("accessTo"), wsTerm).
+				AddTriple(appendAllTerm, domain.NewNS("acl").Get("agentClass"), domain.NewNS("foaf").Get("Agent")).
+				AddTriple(appendAllTerm, domain.NewNS("acl").Get("mode"), domain.NewNS("acl").Get("Append"))
 		}
 
 		// write account acl to disk
-		serializedGraph, err := s.parser.Serialize(g, constant.TextTurtle)
+		serializedGraph, err := s.parser.Serialize(a, constant.TextTurtle)
 		if err != nil {
 			return err
 		}
@@ -231,25 +232,17 @@ func (s *Server) AddWorkspaces(account webidAccount, containsEmail bool, g *doma
 		}
 
 		// Append workspace URL to the preferencesFile
-		//if ws.Name != "Inbox" || ws.Name != "Timeline" {
 		pref.AddTriple(wsTerm, domain.NewNS("rdf").Get("type"), domain.NewNS("space").Get("Workspace"))
 		if len(ws.Type) > 0 {
 			pref.AddTriple(wsTerm, domain.NewNS("rdf").Get("type"), domain.NewNS("space").Get(ws.Type))
 		}
-		pref.AddTriple(wsTerm, domain.NewNS("dct").Get("title"), domain.NewLiteral(ws.Label))
-
-		pref.AddTriple(domain.NewResource(account.WebID), domain.NewNS("space").Get("workspace"), wsTerm)
-		//}
-	}
-
-	resource, _ := s.pathInformer.GetPathInfo(account.PrefURI)
-	err := os.MkdirAll(_path.Dir(resource.File), 0755)
-	if err != nil {
-		return err
+		pref.AddTriple(wsTerm, domain.NewNS("dct").Get("title"), domain.NewLiteral(ws.Label)).
+			AddTriple(domain.NewResource(account.WebID), domain.NewNS("space").Get("workspace"), wsTerm)
 	}
 
 	// write account acl to disk
-	serializedGraph, err := s.parser.Serialize(g, constant.TextTurtle)
+	resource, _ := s.pathInformer.GetPathInfo(account.PrefURI)
+	serializedGraph, err := s.parser.Serialize(pref, constant.TextTurtle)
 	if err != nil {
 		return err
 	}
@@ -265,13 +258,12 @@ func (s *Server) AddWorkspaces(account webidAccount, containsEmail bool, g *doma
 }
 
 func (s *Server) createTypeIndex(indexType, url string) error {
-	g := domain.NewGraph(url)
-	g.AddTriple(domain.NewResource(url), domain.NewNS("rdf").Get("type"), domain.NewNS("st").Get("TypeIndex"))
-	g.AddTriple(domain.NewResource(url), domain.NewNS("rdf").Get("type"), domain.NewNS("st").Get(indexType))
-
-	resource, _ := s.pathInformer.GetPathInfo(url)
+	g := domain.NewGraph(url).
+		AddTriple(domain.NewResource(url), domain.NewNS("rdf").Get("type"), domain.NewNS("st").Get("TypeIndex")).
+		AddTriple(domain.NewResource(url), domain.NewNS("rdf").Get("type"), domain.NewNS("st").Get(indexType))
 
 	// write account acl to disk
+	resource, _ := s.pathInformer.GetPathInfo(url)
 	serializedGraph, err := s.parser.Serialize(g, constant.TextTurtle)
 	if err != nil {
 		return err

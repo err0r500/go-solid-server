@@ -74,8 +74,9 @@ func (g *Graph) Add(t *Triple) {
 }
 
 // AddTriple is used to add a triple made of individual S, P, O objects
-func (g *Graph) AddTriple(s Term, p Term, o Term) {
+func (g *Graph) AddTriple(s Term, p Term, o Term) *Graph {
 	g.triples[NewTriple(s, p, o)] = true
+	return g
 }
 
 // Remove is used to remove a Triple object

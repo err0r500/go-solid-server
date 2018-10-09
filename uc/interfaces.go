@@ -143,10 +143,10 @@ type RequestRawAccessor interface {
 	TLS() *tls.ConnectionState
 }
 
-type LDPCHandler interface {
-	ParsePreferHeader(header string) *Preferheaders
-	ParseLinkHeader(header string) *Linkheaders
-}
+//type LDPCHandler interface {
+//	ParsePreferHeader(header string) *Preferheaders
+//	ParseLinkHeader(header string) *Linkheaders
+//}
 
 type UUIDGenerator interface {
 	UUID() string

@@ -38,10 +38,43 @@ type Interactor struct {
 	templater      Templater
 	tokenStorer    TokenStorer
 	uriManipulator URIManipulator
-	ldpcHandler    LDPCHandler
-	uuidGenerator  UUIDGenerator
-	authorizer     ACL
-	authenticator  Authenticator
+	//ldpcHandler    LDPCHandler
+	uuidGenerator UUIDGenerator
+	//authorizer     ACL
+	authenticator Authenticator
+}
+
+// fixme use config struct instead
+func NewInteractor(
+	config domain.ServerConfig,
+	cookieManager CookieManager,
+	logger Debug,
+	filesHandler FilesHandler,
+	httpCaller HttpCaller,
+	mailer Mailer,
+	pathInformer PathInformer,
+	parser Encoder,
+	sparqlHandler SparqlHandler,
+	templater Templater,
+	tokenStorer TokenStorer,
+	uriManipulator URIManipulator,
+	uuidGenerator UUIDGenerator,
+	authenticator Authenticator) Interactor {
+	return Interactor{Config: config,
+		cookieManager:  cookieManager,
+		logger:         logger,
+		fileHandler:    filesHandler,
+		httpCaller:     httpCaller,
+		mailer:         mailer,
+		pathInformer:   pathInformer,
+		parser:         parser,
+		sparqlHandler:  sparqlHandler,
+		templater:      templater,
+		tokenStorer:    tokenStorer,
+		uriManipulator: uriManipulator,
+		uuidGenerator:  uuidGenerator,
+		authenticator:  authenticator,
+	}
 }
 
 func (s Interactor) handleStatusText(status int, err error) string {

@@ -3,6 +3,7 @@ package gold
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"io"
 	"log"
 	"net/http"
@@ -84,9 +85,9 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		}
 	}
 
-	//if len(r.argv) > 0 {
-	//	fmt.Fprint(w, r.argv...)
-	//}
+	if len(r.Argv) > 0 {
+		fmt.Fprint(w, r.Argv...)
+	}
 }
 
 func (s *Server) handle(w http.ResponseWriter, req uc.RequestGetter) *uc.Response {

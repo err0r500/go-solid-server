@@ -223,11 +223,11 @@ func (s *Server) AddWorkspaces(account webidAccount, containsEmail bool, g *doma
 		}
 
 		// write account acl to disk
-		serializedGraph, err := s.parser.Serialize(a, constant.TextTurtle)
+		serializedAclGraph, err := s.parser.Serialize(a, constant.TextTurtle)
 		if err != nil {
 			return err
 		}
-		if err := s.fileHandler.CreateOrUpdateFile(resource.AclFile, strings.NewReader(serializedGraph)); err != nil {
+		if err := s.fileHandler.CreateOrUpdateFile(resource.AclFile, strings.NewReader(serializedAclGraph)); err != nil {
 			return err
 		}
 
@@ -242,11 +242,11 @@ func (s *Server) AddWorkspaces(account webidAccount, containsEmail bool, g *doma
 
 	// write account acl to disk
 	resource, _ := s.pathInformer.GetPathInfo(account.PrefURI)
-	serializedGraph, err := s.parser.Serialize(pref, constant.TextTurtle)
+	serializedPrefGraph, err := s.parser.Serialize(pref, constant.TextTurtle)
 	if err != nil {
 		return err
 	}
-	if err := s.fileHandler.CreateOrUpdateFile(resource.File, strings.NewReader(serializedGraph)); err != nil {
+	if err := s.fileHandler.CreateOrUpdateFile(resource.File, strings.NewReader(serializedPrefGraph)); err != nil {
 		return err
 	}
 

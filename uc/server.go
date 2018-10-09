@@ -38,10 +38,8 @@ type Interactor struct {
 	templater      Templater
 	tokenStorer    TokenStorer
 	uriManipulator URIManipulator
-	//ldpcHandler    LDPCHandler
-	uuidGenerator UUIDGenerator
-	//authorizer     ACL
-	authenticator Authenticator
+	uuidGenerator  UUIDGenerator
+	authenticator  Authenticator
 }
 
 // fixme use config struct instead

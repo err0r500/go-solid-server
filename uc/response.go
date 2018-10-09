@@ -5,7 +5,7 @@ type Response struct {
 	headers     map[string][]string
 	Body        []byte
 	redirectURL string
-	argv        []interface{}
+	Argv        []interface{}
 }
 
 func NewResponse() *Response {
@@ -33,7 +33,7 @@ func (r *Response) HeaderDel(key string) {
 
 func (r *Response) Respond(status int, a ...interface{}) *Response {
 	r.Status = status
-	r.argv = a
+	r.Argv = a
 	return r
 }
 

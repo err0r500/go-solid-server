@@ -143,8 +143,11 @@ func (s Interactor) Post(req SafeRequestGetter, resource *domain.PathInfo, dataH
 			}
 
 			if g.NotEmpty() {
-				err = s.fileHandler.SaveGraph(g, resource.File, constant.TextTurtle)
+				serializedGraph, err := s.parser.Serialize(g, constant.TextTurtle)
 				if err != nil {
+					return r.Respond(500, err)
+				}
+				if err := s.fileHandler.CreateOrUpdateFile(resource.File, strings.NewReader(serializedGraph)); err != nil {
 					s.logger.Debug("POST g.SaveGraph err: " + err.Error())
 				} else {
 					s.logger.Debug("Wrote resource file: " + resource.File)

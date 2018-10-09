@@ -310,8 +310,11 @@ func validateRecoveryToken(w http.ResponseWriter, req uc.SafeRequestGetter, s *S
 			g.AddTriple(m.Subject, domain.NewNS("acl").Get("password"), domain.NewLiteral(saltedPassword(s.Config.Salt, pass)))
 
 			// write account acl to disk
-			err = s.fileHandler.SaveGraph(g, resource.AclFile, constant.TextTurtle)
+			serializedAccountAclGraph, err := s.parser.Serialize(g, constant.TextTurtle)
 			if err != nil {
+				return SystemReturn{Status: 500, Body: err.Error()}
+			}
+			if err := s.fileHandler.CreateOrUpdateFile(resource.AclFile, strings.NewReader(serializedAccountAclGraph)); err != nil {
 				s.logger.Debug("Could not save account acl file with new password. Error: " + err.Error())
 				return SystemReturn{Status: 500, Body: err.Error()}
 			}
@@ -393,10 +396,12 @@ func newAccount(w http.ResponseWriter, req uc.SafeRequestGetter, s *Server) Syst
 
 	// Generate WebID profile graph for this account
 	g := NewWebIDProfile(account)
-
 	// write WebID profile to disk
-	err = s.fileHandler.SaveGraph(g, resource.File, constant.TextTurtle)
+	serializedAccountGraph, err := s.parser.Serialize(g, constant.TextTurtle)
 	if err != nil {
+		return SystemReturn{Status: 500, Body: err.Error()}
+	}
+	if err := s.fileHandler.CreateOrUpdateFile(resource.File, strings.NewReader(serializedAccountGraph)); err != nil {
 		s.logger.Debug("Saving profile error: " + err.Error())
 		return SystemReturn{Status: 500, Body: err.Error()}
 	}
@@ -418,8 +423,11 @@ func newAccount(w http.ResponseWriter, req uc.SafeRequestGetter, s *Server) Syst
 	g.AddTriple(readAllTerm, domain.NewNS("acl").Get("mode"), domain.NewNS("acl").Get("Read"))
 
 	// write profile acl to disk
-	err = s.fileHandler.SaveGraph(g, resource.AclFile, constant.TextTurtle)
+	serializedAclGraph, err := s.parser.Serialize(g, constant.TextTurtle)
 	if err != nil {
+		return SystemReturn{Status: 500, Body: err.Error()}
+	}
+	if err := s.fileHandler.CreateOrUpdateFile(resource.AclFile, strings.NewReader(serializedAclGraph)); err != nil {
 		s.logger.Debug("Saving profile acl error: " + err.Error())
 		return SystemReturn{Status: 500, Body: err.Error()}
 	}
@@ -459,8 +467,11 @@ func newAccount(w http.ResponseWriter, req uc.SafeRequestGetter, s *Server) Syst
 	g.AddTriple(aclTerm, domain.NewNS("acl").Get("mode"), domain.NewNS("acl").Get("Control"))
 
 	// write account acl to disk
-	err = s.fileHandler.SaveGraph(g, resource.AclFile, constant.TextTurtle)
+	serializedDefaultAclGraph, err := s.parser.Serialize(g, constant.TextTurtle)
 	if err != nil {
+		return SystemReturn{Status: 500, Body: err.Error()}
+	}
+	if err := s.fileHandler.CreateOrUpdateFile(resource.AclFile, strings.NewReader(serializedDefaultAclGraph)); err != nil {
 		s.logger.Debug("Saving account acl error: " + err.Error())
 		return SystemReturn{Status: 500, Body: err.Error()}
 	}

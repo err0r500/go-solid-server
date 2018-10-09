@@ -6,6 +6,7 @@ import (
 	"io"
 	"io/ioutil"
 	"net/url"
+	"strings"
 
 	"github.com/err0r500/go-solid-server/constant"
 	"github.com/err0r500/go-solid-server/domain"
@@ -61,8 +62,11 @@ func (s Interactor) Patch(req SafeRequestGetter, resource *domain.PathInfo, data
 			}
 		}
 
-		err = s.fileHandler.SaveGraph(g, resource.File, constant.TextTurtle)
+		serializedGraph, err := s.parser.Serialize(g, constant.TextTurtle)
 		if err != nil {
+			return r.Respond(500, err)
+		}
+		if err := s.fileHandler.CreateOrUpdateFile(resource.File, strings.NewReader(serializedGraph)); err != nil {
 			s.logger.Debug("PATCH g.SaveGraph err: " + err.Error())
 			return r.Respond(500, err)
 		}

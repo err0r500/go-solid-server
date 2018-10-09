@@ -32,12 +32,10 @@ type Server struct {
 	pathInformer   uc.PathInformer
 	parser         uc.Encoder
 	rdfHandler     encoder.RdfEncoder // fixme : remove this one
-	sparqlHandler  uc.SparqlHandler
 	templater      uc.Templater
 	tokenStorer    uc.TokenStorer
 	uriManipulator uc.URIManipulator
 	uuidGen        uc.UUIDGenerator
-	authorizer     uc.ACL
 }
 
 // ServeHTTP handles the response
@@ -89,18 +87,6 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	//if len(r.argv) > 0 {
 	//	fmt.Fprint(w, r.argv...)
 	//}
-}
-
-// Twinql Query
-func TwinqlQuery(w http.ResponseWriter, req uc.SafeRequestGetter, s *Server, user string) *uc.Response {
-	r := uc.NewResponse()
-
-	err := s.ProxyReq(w, req, s.Config.QueryTemplate, user)
-	if err != nil {
-		s.logger.Debug("Query error:", err.Error())
-	}
-
-	return r
 }
 
 func (s *Server) handle(w http.ResponseWriter, req uc.RequestGetter) *uc.Response {
@@ -220,6 +206,18 @@ func (s *Server) handle(w http.ResponseWriter, req uc.RequestGetter) *uc.Respons
 	default:
 		return r.Respond(405, "405 - Method Not Allowed:", req.Method)
 	}
+	return r
+}
+
+// Twinql Query
+func TwinqlQuery(w http.ResponseWriter, req uc.SafeRequestGetter, s *Server, user string) *uc.Response {
+	r := uc.NewResponse()
+
+	err := s.ProxyReq(w, req, s.Config.QueryTemplate, user)
+	if err != nil {
+		s.logger.Debug("Query error:", err.Error())
+	}
+
 	return r
 }
 

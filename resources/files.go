@@ -49,42 +49,6 @@ func (origFilesHandler) GetFileContent(path string) ([]byte, error) {
 	return ioutil.ReadFile(path)
 }
 
-// SaveGraph is used to dump RDF from a Graph into a file
-func (origFilesHandler) SaveGraph(g *domain.Graph, path string, mime string) error {
-	if err := createFolderIfNeeded(path); err != nil {
-		return err
-	}
-
-	f, err := os.OpenFile(path, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0664)
-	if err != nil {
-		return err
-	}
-	defer f.Close()
-	// fixme : actually write the file!
-	//serializerName := mimeSerializer[mime]
-	//if len(serializerName) == 0 {
-	//	serializerName = "turtle"
-	//}
-	//serializer := crdf.NewSerializer(serializerName)
-	//defer serializer.Free()
-	//err := serializer.SetFile(file, g.URI())
-	//if err != nil {
-	//	return err
-	//}
-	//ch := make(chan *crdf.Statement, 1024)
-	//go func() {
-	//	for triple := range g.IterTriples() {
-	//		ch <- &crdf.Statement{
-	//			Subject:   FromDomain(triple.Subject),
-	//			Predicate: FromDomain(triple.Predicate),
-	//			Object:    FromDomain(triple.Object),
-	//		}
-	//	}
-	//	close(ch)
-	//}()
-	//serializer.AddN(ch)
-	return nil
-}
 func (h origFilesHandler) Read(path string) (io.Reader, error) { return os.Open(path) }
 func (h origFilesHandler) FileFirstLine(path string) (string, error) {
 	fd, err := h.Read(path)

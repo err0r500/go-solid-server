@@ -57,7 +57,8 @@ func NewInteractor(
 	tokenStorer TokenStorer,
 	uriManipulator URIManipulator,
 	uuidGenerator UUIDGenerator,
-	authenticator Authenticator) Interactor {
+	authenticator Authenticator,
+	spkacHandler SpkacHandler) Interactor {
 	return Interactor{Config: config,
 		cookieManager:  cookieManager,
 		logger:         logger,

@@ -1,10 +1,8 @@
 package gold
 
 import (
-	"crypto/rsa"
 	"encoding/base64"
 	"encoding/json"
-	"fmt"
 	"io/ioutil"
 	"net/http"
 	"net/url"
@@ -484,24 +482,13 @@ func (s *Server) NewAccount(req uc.SafeRequestGetter) *uc.Response {
 	}
 
 	// create a new x509 cert based on the SPKAC public key
-	certName := account.Name + " [on " + resource.Obj.Host + "]"
-	newSpkac, err := NewSPKACx509(webidURI, certName, spkac)
+	newSpkac, rsaPubMod, rsaPubExp, err := s.spkacHandler.NewSpkac(account.Name+" [on "+resource.Obj.Host+"]", spkac, webidURI)
 	if err != nil {
-		s.logger.Debug("NewSPKACx509 error: " + err.Error())
+		s.logger.Debug("NewSPKAC error: " + err.Error())
 		return uc.NewResponse().Respond(500, err.Error())
 	}
 
-	pubKey, err := ParseSPKAC(spkac)
-	if err != nil {
-		s.logger.Debug("ParseSPKAC error: " + err.Error())
-		return uc.NewResponse().Respond(500, err.Error())
-	}
-
-	rsaPub := pubKey.(*rsa.PublicKey)
-	mod := fmt.Sprintf("%x", rsaPub.N)
-	exp := fmt.Sprintf("%d", rsaPub.E)
-	err = s.AddCertKeys(webidURI, mod, exp)
-	if err != nil {
+	if err := s.AddCertKeys(webidURI, rsaPubMod, rsaPubExp); err != nil {
 		s.logger.Debug("Couldn't add cert keys to profile: " + err.Error())
 		return uc.NewResponse().Respond(500, err.Error())
 	}
@@ -518,7 +505,7 @@ func (s *Server) NewAccount(req uc.SafeRequestGetter) *uc.Response {
 	r := uc.NewResponse()
 	r.SessionCookie = webidURI
 	r.HeaderSet("User", webidURI)
-	return r.Respond(200, `<iframe width="0" height="0" style="display: none;" src="data:application/x-x509-user-cert;base64,`+base64.StdEncoding.EncodeToString(newSpkac)+`"></iframe>`) //SystemReturn{Status: 200, Body: body}
+	return r.Respond(200, `<iframe width="0" height="0" style="display: none;" src="data:application/x-x509-user-cert;base64,`+base64.StdEncoding.EncodeToString(newSpkac)+`"></iframe>`)
 }
 
 func (s *Server) NewCert(req uc.SafeRequestGetter, loggedUser string) *uc.Response {
@@ -531,7 +518,7 @@ func (s *Server) NewCert(req uc.SafeRequestGetter, loggedUser string) *uc.Respon
 	if len(webidURI) > 0 && len(spkac) > 0 {
 		// create a new x509 cert based on the SPKAC public key
 		certName := name + " [on " + resource.Obj.Host + "]"
-		newSpkac, err := NewSPKACx509(webidURI, certName, spkac)
+		newSpkac, _, _, err := s.spkacHandler.NewSpkac(webidURI, certName, spkac)
 		if err != nil {
 			s.logger.Debug("NewSPKACx509 error: " + err.Error())
 			return uc.NewResponse().Respond(500, err.Error()) //SystemReturn{Status: 500, Body: err.Error()}
@@ -539,28 +526,23 @@ func (s *Server) NewCert(req uc.SafeRequestGetter, loggedUser string) *uc.Respon
 		s.logger.Debug("Generated new cert for " + webidURI)
 
 		// Append cert to profile if it's the case
-		//loggedUser := w.Header().Get("User")
 		s.logger.Debug("Checking if request is authenticated: " + loggedUser)
 		if len(loggedUser) > 0 && loggedUser == webidURI && strings.HasPrefix(webidURI, resource.Base) {
-			acl := uc.NewWAC(loggedUser, "")
-			aclStatus, err := s.i.AllowWrite(acl, req.Header("Origin"), strings.Split(webidURI, "#")[0])
-			if aclStatus > 200 || err != nil {
+			if aclStatus, err := s.i.AllowWrite(uc.NewWAC(loggedUser, ""), req.Header("Origin"), strings.Split(webidURI, "#")[0]); aclStatus > 200 || err != nil {
 				return uc.NewResponse().Respond(aclStatus, err.Error()) //SystemReturn{Status: aclStatus, Body: err.Error()}
 			}
 
-			pubKey, err := ParseSPKAC(spkac)
-			if err != nil {
-				s.logger.Debug("ParseSPKAC error: " + err.Error())
-				return uc.NewResponse().Respond(500, err.Error()) //SystemReturn{Status: 500, Body: err.Error()}
-			}
-			rsaPub := pubKey.(*rsa.PublicKey)
-			mod := fmt.Sprintf("%x", rsaPub.N)
-			exp := fmt.Sprintf("%d", rsaPub.E)
-			err = s.AddCertKeys(webidURI, mod, exp)
+			mod, exp, err := s.spkacHandler.ParseSPKAC(spkac)
 			if err != nil {
 				s.logger.Debug("Couldn't add cert keys to profile: " + err.Error())
 				return uc.NewResponse().Respond(500, err.Error()) //SystemReturn{Status: 500, Body: err.Error()}
 			}
+
+			if err := s.AddCertKeys(webidURI, mod, exp); err != nil {
+				s.logger.Debug("Couldn't add cert keys to profile: " + err.Error())
+				return uc.NewResponse().Respond(500, err.Error()) //SystemReturn{Status: 500, Body: err.Error()}
+			}
+
 			s.logger.Debug("Also added cert public key to " + webidURI)
 		} else {
 			s.logger.Debug("Not authenticated / local user: " + loggedUser + " != " + webidURI + " on " + resource.Base)

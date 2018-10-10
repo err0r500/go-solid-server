@@ -158,3 +158,8 @@ type Authenticator interface {
 	WebIDDigestAuth(req SafeRequestGetter) (string, error)
 	WebIDTLSAuth(tls RequestGetter) (string, error)
 }
+
+type SpkacHandler interface {
+	NewSpkac(certName, spkac, webidURI string) ([]byte, string, string, error)
+	ParseSPKAC(spkacBase64 string) (string, string, error)
+}

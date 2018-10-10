@@ -37,6 +37,7 @@ type Server struct {
 	tokenStorer    uc.TokenStorer
 	uriManipulator uc.URIManipulator
 	uuidGen        uc.UUIDGenerator
+	spkacHandler   uc.SpkacHandler
 }
 
 // ServeHTTP handles the response

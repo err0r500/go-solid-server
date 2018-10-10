@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/err0r500/go-solid-server/spkac"
+
 	"github.com/err0r500/go-solid-server/authentication"
 	"github.com/err0r500/go-solid-server/uuid"
 
@@ -63,6 +65,7 @@ func NewServer(config domain.ServerConfig) *Server {
 			domain.URIHandler{},
 			uuid.New(),
 			authentication.New(httpCaller.New()),
+			spkac.New(),
 		),
 
 		cookieManager:  cookies.New(config.CookieAge),

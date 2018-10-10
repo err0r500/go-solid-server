@@ -212,7 +212,7 @@ func (s Interactor) SendRecoveryToken(req SafeRequestGetter) *Response {
 }
 
 func (s Interactor) ValidateRecoveryToken(req SafeRequestGetter) *Response {
-	token, err := decodeQuery(req.FormValue("token"))
+	token, err := s.uriManipulator.DecodeQuery(req.FormValue("token"))
 	if err != nil {
 		s.logger.Debug("Decode query err: " + err.Error())
 		return NewResponse().Respond(500, err.Error()) //SystemReturn{Status: 500, Body: err.Error()}

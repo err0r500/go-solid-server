@@ -67,20 +67,6 @@ func NewServer(config domain.ServerConfig) *Server {
 			authentication.New(httpCaller.New()),
 			spkac.New(),
 		),
-
-		cookieManager:  cookies.New(config.CookieAge),
-		logger:         debugger,
-		fileHandler:    resources.New(encoder.New()),
-		httpCaller:     httpCaller.New(),
-		mailer:         mail.New(domain.EmailConfig{}),
-		pathInformer:   pathInfo.New(config),
-		parser:         encoder.New(),
-		rdfHandler:     encoder.RdfEncoder{},
-		templater:      pages.New(config.DataRoot),
-		tokenStorer:    tokenStorer.New(db),
-		uriManipulator: domain.URIHandler{},
-
-		//webdavHandler: webdav.New(config.DataRoot),
 	}
 
 	mime.AddRDFExtension(s.Config.ACLSuffix)

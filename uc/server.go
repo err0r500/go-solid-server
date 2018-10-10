@@ -22,6 +22,7 @@ type LogicHandler interface {
 	LogOut() *Response
 	NewAccount(req SafeRequestGetter) *Response
 	NewCert(req SafeRequestGetter, loggedUser string) *Response
+	GetAuthzFromToken(token string, user string, req SafeRequestGetter) (string, error)
 
 	AllowRead(acl WAC, origin, path string) (int, error) // fixme unify the interface
 	AllowWrite(acl WAC, origin, path string) (int, error)

@@ -73,6 +73,9 @@ func decodeQuery(s string) (string, error) {
 func (URIHandler) SplitHostPort(hostport string) (host, port string, err error) {
 	return net.SplitHostPort(hostport)
 }
+func (URIHandler) DecodeQuery(s string) (string, error) {
+	return url.QueryUnescape(s)
+}
 
 // frag = lambda x: x[x.find('#')==-1 and len(x) or x.find('#'):len(x)-(x[-1]=='>')]
 // unfrag = lambda x: '#' in x and (x[:x.find('#')==-1 and len(x) or x.find('#')] + (x[0]=='<' and '>' or '')) or x

@@ -91,7 +91,3 @@ func saltedPassword(salt, pass string) string {
 func encodeQuery(s string) string {
 	return url.QueryEscape(s)
 }
-
-func decodeQuery(s string) (string, error) {
-	return url.QueryUnescape(s)
-}

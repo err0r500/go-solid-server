@@ -124,7 +124,7 @@ func (s *Server) handle(w http.ResponseWriter, req uc.RequestGetter) *uc.Respons
 			}
 		}
 		w.Header().Set("User", user)
-		s.userCookieSet(w, user)
+		s.cookieManager.SetSessionCookie(w, user)
 	}
 
 	acl := uc.NewWAC(user, req.FormValue("key"))
@@ -240,11 +240,11 @@ func (s *Server) ProxyReq(w http.ResponseWriter, req uc.SafeRequestGetter, reqUR
 	}
 
 	if len(req.FormValue("key")) > 0 {
-		token, err := decodeQuery(req.FormValue("key"))
+		token, err := s.uriManipulator.DecodeQuery(req.FormValue("key"))
 		if err != nil {
 			s.logger.Debug(err.Error())
 		}
-		user, err := s.GetAuthzFromToken(token, foundUser, req)
+		user, err := s.i.GetAuthzFromToken(token, foundUser, req)
 		if err != nil {
 			s.logger.Debug(err.Error())
 		} else {
@@ -258,7 +258,7 @@ func (s *Server) ProxyReq(w http.ResponseWriter, req uc.SafeRequestGetter, reqUR
 		if err != nil {
 			s.logger.Debug(err.Error())
 		}
-		user, err := s.GetAuthzFromToken(token, foundUser, req)
+		user, err := s.i.GetAuthzFromToken(token, foundUser, req)
 		if err != nil {
 			s.logger.Debug(err.Error())
 		} else {

@@ -70,6 +70,7 @@ type URIManipulator interface {
 	Unquote(s string) string
 	ParseBearerAuthorizationHeader(header string) (string, error)
 	SplitHostPort(hostport string) (host, port string, err error)
+	DecodeQuery(s string) (string, error)
 }
 
 type PathInformer interface {

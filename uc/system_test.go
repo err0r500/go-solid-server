@@ -1,4 +1,4 @@
-package gold_test
+package uc
 
 // fixme : these are integration tests. reactivate them when unit tests and code structure are OK
 //

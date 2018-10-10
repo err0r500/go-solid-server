@@ -15,6 +15,14 @@ type LogicHandler interface {
 	Post(req SafeRequestGetter, resource *domain.PathInfo, dataHasParser bool, dataMime string, acl WAC) *Response
 	Put(req RequestGetter, resource *domain.PathInfo, acl WAC) *Response
 
+	AccountRecovery(req SafeRequestGetter) *Response
+	AccountStatus(req SafeRequestGetter) *Response
+	AccountTokens(req SafeRequestGetter, user string, isOwner bool) *Response
+	LogIn(req RequestGetter, user string) *Response
+	LogOut() *Response
+	NewAccount(req SafeRequestGetter) *Response
+	NewCert(req SafeRequestGetter, loggedUser string) *Response
+
 	AllowRead(acl WAC, origin, path string) (int, error) // fixme unify the interface
 	AllowWrite(acl WAC, origin, path string) (int, error)
 	AllowControl(acl WAC, origin, path string) (int, error)
@@ -40,6 +48,7 @@ type Interactor struct {
 	uriManipulator URIManipulator
 	uuidGenerator  UUIDGenerator
 	authenticator  Authenticator
+	spkacHandler   SpkacHandler
 }
 
 // fixme use config struct instead

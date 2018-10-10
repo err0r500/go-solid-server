@@ -140,7 +140,7 @@ func (s *Server) handle(w http.ResponseWriter, req uc.RequestGetter) *uc.Respons
 
 	// Intercept API requests
 	if req.TargetsAPI() {
-		return s.HandleSystem(w, req, user, isOwner)
+		return s.handleSystemRequest(w, req, user, isOwner)
 	}
 
 	// Proxy requests
@@ -274,4 +274,25 @@ func (s *Server) ProxyReq(w http.ResponseWriter, req uc.SafeRequestGetter, reqUR
 	//req.Header.Set("User", req.User)
 	//proxy.ServeHTTP(w, req.Request())
 	return nil
+}
+
+// handleSystemRequest is a router for system specific APIs
+func (s *Server) handleSystemRequest(w http.ResponseWriter, req uc.RequestGetter, user string, isOwner bool) *uc.Response {
+	if strings.HasSuffix(req.URLPath(), "status") {
+		// unsupported yet when server is running on one host
+		return s.i.AccountStatus(req)
+	} else if strings.HasSuffix(req.URLPath(), "new") {
+		return s.i.NewAccount(req)
+	} else if strings.HasSuffix(req.URLPath(), "cert") {
+		return s.i.NewCert(req, user)
+	} else if strings.HasSuffix(req.URLPath(), "login") {
+		return s.i.LogIn(req, user)
+	} else if strings.HasSuffix(req.URLPath(), "logout") {
+		return s.i.LogOut()
+	} else if strings.HasSuffix(req.URLPath(), "tokens") {
+		return s.i.AccountTokens(req, user, isOwner)
+	} else if strings.HasSuffix(req.URLPath(), "recovery") {
+		return s.i.AccountRecovery(req)
+	}
+	return uc.NewResponse().Respond(501)
 }

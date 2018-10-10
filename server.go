@@ -78,15 +78,8 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	if r.Status > 0 {
 		w.WriteHeader(r.Status)
 	}
-	if r.Body != nil {
-		if _, err := w.Write(r.Body); err != nil {
-			s.logger.Debug("failed to write response body")
-			return
-		}
-	}
-
-	if len(r.Argv) > 0 {
-		fmt.Fprint(w, r.Argv...)
+	if len(r.Body) > 0 {
+		fmt.Fprint(w, r.Body...)
 	}
 }
 
@@ -133,9 +126,9 @@ func (s *Server) handle(w http.ResponseWriter, req uc.RequestGetter) *uc.Respons
 		}
 	}
 
-	r := uc.NewResponse()
 	// Intercept API requests
 	if req.TargetsAPI() {
+		r := uc.NewResponse()
 		resp := HandleSystem(w, req, s, user, isOwner)
 		if resp.Bytes != nil && len(resp.Bytes) > 0 {
 			io.Copy(w, bytes.NewReader(resp.Bytes))
@@ -146,6 +139,7 @@ func (s *Server) handle(w http.ResponseWriter, req uc.RequestGetter) *uc.Respons
 
 	// Proxy requests
 	if strings.HasSuffix(req.URLPath(), constant.ProxyPath) {
+		r := uc.NewResponse()
 		if err := s.ProxyReq(w, req, s.Config.ProxyTemplate+req.FormValue("uri"), user); err != nil {
 			s.logger.Debug("Proxy error:", err.Error())
 		}
@@ -162,7 +156,7 @@ func (s *Server) handle(w http.ResponseWriter, req uc.RequestGetter) *uc.Respons
 	if len(dataMime) > 0 {
 		if dataMime != constant.MultipartFormData && !dataHasParser && req.Method() != "PUT" && req.Method() != "HEAD" && req.Method() != "OPTIONS" {
 			s.logger.Debug("Request contains unsupported Media Type:" + dataMime)
-			return r.Respond(415, "HTTP 415 - Unsupported Media Type:", dataMime)
+			return uc.NewResponse().Respond(415, "HTTP 415 - Unsupported Media Type:", dataMime)
 		}
 	}
 
@@ -173,7 +167,7 @@ func (s *Server) handle(w http.ResponseWriter, req uc.RequestGetter) *uc.Respons
 		contentType, err = acceptList.Negotiate(mime.SerializerMimes...)
 		if err != nil {
 			s.logger.Debug("Accept type not acceptable: " + err.Error())
-			return r.Respond(406, "HTTP 406 - Accept type not acceptable: "+err.Error())
+			return uc.NewResponse().Respond(406, "HTTP 406 - Accept type not acceptable: "+err.Error())
 		}
 		//req.AcceptType = contentType // todo : not used ?
 	}
@@ -202,15 +196,14 @@ func (s *Server) handle(w http.ResponseWriter, req uc.RequestGetter) *uc.Respons
 		return s.i.Delete(req, resource, acl)
 	case "MKCOL":
 		return s.i.MkCol(req, resource, acl)
-	//case "COPY", "MOVE", "LOCK", "UNLOCK":
-	//	s.CopyMoveLockUnlock(w, req, resource, acl)
-	default:
-		return r.Respond(405, "405 - Method Not Allowed:", req.Method)
+		//case "COPY", "MOVE", "LOCK", "UNLOCK":
+		//	s.CopyMoveLockUnlock(w, req, resource, acl)
 	}
-	return r
+
+	return uc.NewResponse().Respond(405, "405 - Method Not Allowed:", req.Method)
 }
 
-// Twinql Query
+// TwinqlQuery ...
 func TwinqlQuery(w http.ResponseWriter, req uc.SafeRequestGetter, s *Server, user string) *uc.Response {
 	r := uc.NewResponse()
 
@@ -229,15 +222,15 @@ func isLocal(host string) bool {
 		strings.HasPrefix(host, "localhost")
 }
 
-// Proxy requests
-func (s *Server) ProxyReq(w http.ResponseWriter, req uc.SafeRequestGetter, reqUrl, foundUser string) error {
-	uri, err := url.Parse(reqUrl)
+// ProxyReq ...
+func (s *Server) ProxyReq(w http.ResponseWriter, req uc.SafeRequestGetter, reqURL, foundUser string) error {
+	uri, err := url.Parse(reqURL)
 	if err != nil {
 		return err
 	}
 
 	if !s.Config.ProxyLocal && isLocal(uri.Host) {
-		return errors.New("Proxying requests to the local network is not allowed.")
+		return errors.New("proxying requests to the local network is not allowed")
 	}
 
 	if len(req.FormValue("key")) > 0 {

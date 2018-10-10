@@ -3,9 +3,8 @@ package uc
 type Response struct {
 	Status      int
 	headers     map[string][]string
-	Body        []byte
+	Body        []interface{}
 	redirectURL string
-	Argv        []interface{}
 }
 
 func NewResponse() *Response {
@@ -33,7 +32,7 @@ func (r *Response) HeaderDel(key string) {
 
 func (r *Response) Respond(status int, a ...interface{}) *Response {
 	r.Status = status
-	r.Argv = a
+	r.Body = a
 	return r
 }
 

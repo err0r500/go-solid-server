@@ -55,7 +55,6 @@ type FilesHandler interface {
 	Read(path string) (io.Reader, error)
 	FileFirstLine(path string) (string, error)
 	SaveFiles(folder string, files map[string]io.Reader) error
-	//SaveGraph(g *domain.Graph, path string, mime string) error
 	UpdateGraphFromFile(g *domain.Graph, encoder Encoder, filename string)
 	AppendFile(g *domain.Graph, filename string, baseURI string)
 	Exists(path string) bool

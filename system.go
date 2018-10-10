@@ -310,17 +310,16 @@ func validateRecoveryToken(w http.ResponseWriter, req uc.SafeRequestGetter, s *S
 			g.AddTriple(m.Subject, domain.NewNS("acl").Get("password"), domain.NewLiteral(saltedPassword(s.Config.Salt, pass)))
 
 			// write account acl to disk
-			serializedAccountAclGraph, err := s.parser.Serialize(g, constant.TextTurtle)
+			serializedAccountACLGraph, err := s.parser.Serialize(g, constant.TextTurtle)
 			if err != nil {
 				return SystemReturn{Status: 500, Body: err.Error()}
 			}
-			if err := s.fileHandler.CreateOrUpdateFile(resource.AclFile, strings.NewReader(serializedAccountAclGraph)); err != nil {
+			if err := s.fileHandler.CreateOrUpdateFile(resource.AclFile, strings.NewReader(serializedAccountACLGraph)); err != nil {
 				s.logger.Debug("Could not save account acl file with new password. Error: " + err.Error())
 				return SystemReturn{Status: 500, Body: err.Error()}
 			}
 			// All set
 			return SystemReturn{Status: 200, Body: "Password saved!"}
-			break
 		}
 	}
 
@@ -423,11 +422,11 @@ func newAccount(w http.ResponseWriter, req uc.SafeRequestGetter, s *Server) Syst
 	g.AddTriple(readAllTerm, domain.NewNS("acl").Get("mode"), domain.NewNS("acl").Get("Read"))
 
 	// write profile acl to disk
-	serializedAclGraph, err := s.parser.Serialize(g, constant.TextTurtle)
+	serializedACLGraph, err := s.parser.Serialize(g, constant.TextTurtle)
 	if err != nil {
 		return SystemReturn{Status: 500, Body: err.Error()}
 	}
-	if err := s.fileHandler.CreateOrUpdateFile(resource.AclFile, strings.NewReader(serializedAclGraph)); err != nil {
+	if err := s.fileHandler.CreateOrUpdateFile(resource.AclFile, strings.NewReader(serializedACLGraph)); err != nil {
 		s.logger.Debug("Saving profile acl error: " + err.Error())
 		return SystemReturn{Status: 500, Body: err.Error()}
 	}
@@ -467,11 +466,11 @@ func newAccount(w http.ResponseWriter, req uc.SafeRequestGetter, s *Server) Syst
 	g.AddTriple(aclTerm, domain.NewNS("acl").Get("mode"), domain.NewNS("acl").Get("Control"))
 
 	// write account acl to disk
-	serializedDefaultAclGraph, err := s.parser.Serialize(g, constant.TextTurtle)
+	serializedDefaultACLGraph, err := s.parser.Serialize(g, constant.TextTurtle)
 	if err != nil {
 		return SystemReturn{Status: 500, Body: err.Error()}
 	}
-	if err := s.fileHandler.CreateOrUpdateFile(resource.AclFile, strings.NewReader(serializedDefaultAclGraph)); err != nil {
+	if err := s.fileHandler.CreateOrUpdateFile(resource.AclFile, strings.NewReader(serializedDefaultACLGraph)); err != nil {
 		s.logger.Debug("Saving account acl error: " + err.Error())
 		return SystemReturn{Status: 500, Body: err.Error()}
 	}
@@ -683,7 +682,7 @@ func accountTokens(req uc.SafeRequestGetter, s *Server, user string, isOwner boo
 		return SystemReturn{Status: 403, Body: "You are not allowed to view this page"}
 	}
 
-	tokensHtml := "<div>"
+	tokensHTML := "<div>"
 
 	if len(req.FormValue("revokeAuthz")) > 0 {
 		delStatus := "<p style=\"color: green;\">Successfully revoked token!</p>"
@@ -691,25 +690,25 @@ func accountTokens(req uc.SafeRequestGetter, s *Server, user string, isOwner boo
 		if err != nil {
 			delStatus = "<p>Could not revoke token. Error: " + err.Error() + "</p>"
 		}
-		tokensHtml += delStatus
+		tokensHTML += delStatus
 	}
 
 	tokens, err := s.tokenStorer.GetTokensByType(constant.HAuthorization, req.Host())
-	tokensHtml += "<h2>HAuthorization tokens for applications</h2>\n"
-	tokensHtml += "<div>"
+	tokensHTML += "<h2>HAuthorization tokens for applications</h2>\n"
+	tokensHTML += "<div>"
 	if err == nil {
 		for token, values := range tokens {
-			tokensHtml += "<p>Token: " + string(token) + "<br>\n"
-			tokensHtml += "Application: <strong>" + values["origin"] + "</strong>"
-			tokensHtml += " <a href=\"" + req.BaseURI() + "?revokeAuthz=" + encodeQuery(token) + "\">Revoke</a></p>\n"
+			tokensHTML += "<p>Token: " + string(token) + "<br>\n"
+			tokensHTML += "Application: <strong>" + values["origin"] + "</strong>"
+			tokensHTML += " <a href=\"" + req.BaseURI() + "?revokeAuthz=" + encodeQuery(token) + "\">Revoke</a></p>\n"
 		}
-		tokensHtml += "</ul>\n"
+		tokensHTML += "</ul>\n"
 		if len(tokens) == 0 {
-			tokensHtml += "No authorization tokens found."
+			tokensHTML += "No authorization tokens found."
 		}
 	}
 
-	tokensHtml += "</div>"
+	tokensHTML += "</div>"
 
-	return SystemReturn{Status: 200, Body: s.templater.TokensTemplate(tokensHtml)}
+	return SystemReturn{Status: 200, Body: s.templater.TokensTemplate(tokensHTML)}
 }

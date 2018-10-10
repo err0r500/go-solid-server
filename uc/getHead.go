@@ -92,7 +92,6 @@ func (s Interactor) GetHead(req RequestGetter, resource *domain.PathInfo, conten
 	g := domain.NewGraph(resource.URI)
 	if resource.IsDir {
 		if len(s.Config.DirIndex) > 0 && contentType == constant.TextHtml {
-
 			magicType = constant.TextHtml
 			maybeRDF = false
 			for _, dirIndex := range s.Config.DirIndex {
@@ -265,12 +264,12 @@ func (s Interactor) GetHead(req RequestGetter, resource *domain.PathInfo, conten
 			}
 
 			r.HeaderSet(constant.HCType, magicType)
-			r.Body, err = s.fileHandler.GetFileContent(resource.File)
+			fileContent, err := s.fileHandler.GetFileContent(resource.File)
 			if err != nil {
 				return r.Respond(500, err.Error())
 			}
 
-			return r.Respond(200)
+			return r.Respond(200, fileContent)
 		}
 	}
 
@@ -289,12 +288,12 @@ func (s Interactor) GetHead(req RequestGetter, resource *domain.PathInfo, conten
 			return r.Respond(status)
 		}
 
-		r.Body, err = s.fileHandler.GetFileContent(resource.File)
+		fileContent, err := s.fileHandler.GetFileContent(resource.File)
 		if err != nil {
 			return r.Respond(500, err.Error())
 		}
 
-		return r.Respond(200)
+		return r.Respond(200, fileContent)
 	}
 
 	if maybeRDF {
@@ -307,6 +306,5 @@ func (s Interactor) GetHead(req RequestGetter, resource *domain.PathInfo, conten
 		return r.Respond(500, err)
 	}
 
-	r.Body = []byte(data)
-	return r.Respond(200)
+	return r.Respond(200, data)
 }

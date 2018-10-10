@@ -69,6 +69,7 @@ type URIManipulator interface {
 	Defrag(s string) string
 	Unquote(s string) string
 	ParseBearerAuthorizationHeader(header string) (string, error)
+	SplitHostPort(hostport string) (host, port string, err error)
 }
 
 type PathInformer interface {
@@ -87,6 +88,8 @@ type CookieManager interface {
 	Encode(name string, value interface{}) (string, error)
 	Decode(name, value string, dst interface{}) error
 	Check(string) error
+	SetSessionCookie(w http.ResponseWriter, user string) error
+	DelSessionCookie(w http.ResponseWriter)
 }
 
 type TokenStorer interface {

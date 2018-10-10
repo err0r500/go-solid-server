@@ -50,7 +50,7 @@ func NewServer(config domain.ServerConfig) *Server {
 		Config: config,
 		i: uc.NewInteractor(
 			config,
-			cookies.New(),
+			cookies.New(config.CookieAge),
 			debugger,
 			resources.New(encoder.New()),
 			httpCaller.New(),
@@ -65,7 +65,7 @@ func NewServer(config domain.ServerConfig) *Server {
 			authentication.New(httpCaller.New()),
 		),
 
-		cookieManager:  cookies.New(),
+		cookieManager:  cookies.New(config.CookieAge),
 		logger:         debugger,
 		fileHandler:    resources.New(encoder.New()),
 		httpCaller:     httpCaller.New(),

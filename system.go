@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
-	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -19,13 +18,6 @@ import (
 
 	"github.com/err0r500/go-solid-server/domain"
 )
-
-// SystemReturn is a generic HTTP response specific to system APIs
-type SystemReturn struct {
-	Status int
-	Body   string
-	Bytes  []byte
-}
 
 type accountRequest struct {
 	Method      string
@@ -47,55 +39,51 @@ type statusResponse struct {
 }
 
 // HandleSystem is a router for system specific APIs
-func HandleSystem(w http.ResponseWriter, req uc.RequestGetter, s *Server, user string, isOwner bool) SystemReturn {
+func (s *Server) HandleSystem(w http.ResponseWriter, req uc.RequestGetter, user string, isOwner bool) *uc.Response {
 	if strings.HasSuffix(req.URLPath(), "status") {
 		// unsupported yet when server is running on one host
-		return accountStatus(w, req, s)
+		return s.AccountStatus(req)
 	} else if strings.HasSuffix(req.URLPath(), "new") {
-		return newAccount(w, req, s)
+		return s.NewAccount(req)
 	} else if strings.HasSuffix(req.URLPath(), "cert") {
-		return newCert(w, req, s)
+		return s.NewCert(req, user)
 	} else if strings.HasSuffix(req.URLPath(), "login") {
-		return s.logIn(w, req, user)
+		return s.logIn(req, user)
 	} else if strings.HasSuffix(req.URLPath(), "logout") {
-		return logOut(w, s)
+		return s.logOut()
 	} else if strings.HasSuffix(req.URLPath(), "tokens") {
-		return accountTokens(req, s, user, isOwner)
+		return s.accountTokens(req, user, isOwner)
 	} else if strings.HasSuffix(req.URLPath(), "recovery") {
-		return accountRecovery(w, req, s)
+		return s.accountRecovery(req)
 	}
-	return SystemReturn{Status: 200}
+	return uc.NewResponse().Respond(501)
 }
 
-func logOut(w http.ResponseWriter, s *Server) SystemReturn {
-	s.userCookieDelete(w)
-	return SystemReturn{Status: 200, Body: "You have been signed out!"}
+func (*Server) logOut() *uc.Response {
+	r := uc.NewResponse()
+	r.SessionCookieShouldBeDeleted = true
+	return r.Respond(200, "You have been signed out")
 }
 
-func (s *Server) logIn(w http.ResponseWriter, req uc.RequestGetter, user string) SystemReturn {
+func (s *Server) logIn(req uc.RequestGetter, user string) *uc.Response {
 	var passL string
 	redirTo := req.FormValue("redirect")
 	origin := req.FormValue("origin")
-
 	s.logger.Debug("Got login request. Optional params: ", redirTo, origin)
 
-	// if cookie is set, just redirect
 	if len(user) > 0 {
-		values := map[string]string{
-			"webid":  user,
-			"origin": origin,
-		}
-		// refresh cookie
-		err := s.userCookieSet(w, user)
-		if err != nil {
-			s.logger.Debug("Error setting new cookie: " + err.Error())
-			return SystemReturn{Status: 500, Body: err.Error()}
-		}
 		// redirect
 		if len(redirTo) > 0 {
-			loginRedirect(w, req, s, values, redirTo)
+			// todo : session Cookie not set at this point, check if OK
+			return s.loginRedirect(req, map[string]string{
+				"webid":  user,
+				"origin": origin,
+			}, redirTo)
 		}
-		return SystemReturn{Status: 200, Body: s.templater.LogoutTemplate(user)}
+
+		r := uc.NewResponse()
+		r.SessionCookie = user
+		return r.Respond(200, s.templater.LogoutTemplate(user))
 	}
 
 	webid := req.FormValue("webid")
@@ -104,16 +92,16 @@ func (s *Server) logIn(w http.ResponseWriter, req uc.RequestGetter, user string)
 	if req.Method() == "GET" {
 		// try to guess WebID from account
 		webid = s.getAccountWebID(req.BaseURI())
-		return SystemReturn{Status: 200, Body: s.templater.LoginTemplate(redirTo, origin, webid)}
+		return uc.NewResponse().Respond(200, s.templater.LoginTemplate(redirTo, origin, webid)) // SystemReturn{Status: 200, Body: s.templater.LoginTemplate(redirTo, origin, webid)}
 	}
 
 	if len(webid) == 0 && len(passF) == 0 {
-		return SystemReturn{Status: 409, Body: "You must supply a valid WebID and password."}
+		return uc.NewResponse().Respond(409, "You must supply a valid WebID and password.") //SystemReturn{Status: 409, Body: "You must supply a valid WebID and password."}
 	}
 	resource, err := s.pathInformer.GetPathInfo(req.BaseURI())
 	if err != nil {
 		s.logger.Debug("PathInfo error: " + err.Error())
-		return SystemReturn{Status: 500, Body: err.Error()}
+		return uc.NewResponse().Respond(500, err.Error()) //SystemReturn{Status: 500, Body: err.Error()}
 	}
 	// try to fetch hashed password from root ,acl
 	resource, _ = s.pathInformer.GetPathInfo(resource.Base)
@@ -131,39 +119,31 @@ func (s *Server) logIn(w http.ResponseWriter, req uc.RequestGetter, user string)
 	// exit if no pass
 	if len(passL) == 0 {
 		s.logger.Debug("Access denied! Could not find a password for WebID: " + webid)
-		return SystemReturn{Status: 403, Body: "Access denied! Could not find a password for WebID: " + webid}
+		return uc.NewResponse().Respond(403, "Access denied! Could not find a password for WebID: "+webid) //SystemReturn{Status: 403, Body: "Access denied! Could not find a password for WebID: " + webid}
 	}
 
 	// check if passwords match
-	passF = saltedPassword(s.Config.Salt, passF)
-	if passF != passL {
+	if passF := saltedPassword(s.Config.Salt, passF); passF != passL {
 		s.logger.Debug("Access denied! Bad WebID or password.")
-		return SystemReturn{Status: 403, Body: "Access denied! Bad WebID or password."}
+		return uc.NewResponse().Respond(403, "Access denied! Bad WebID or password.") //SystemReturn{Status: 403, Body: "Access denied! Bad WebID or password."}
 	}
 
 	// auth OK
-	// also set cookie now
-	err = s.userCookieSet(w, webid)
-	if err != nil {
-		s.logger.Debug("Error setting new cookie: " + err.Error())
-		return SystemReturn{Status: 500, Body: err.Error()}
-	}
-
 	// handle redirect
 	if len(redirTo) > 0 {
-		values := map[string]string{
+		s.loginRedirect(req, map[string]string{
 			"webid":  webid,
 			"origin": origin,
-		}
-		loginRedirect(w, req, s, values, redirTo)
+		}, redirTo)
 	}
 
-	r := req.Request()
-	http.Redirect(w, r, r.RequestURI, 301)
-	return SystemReturn{Status: 200}
+	r := uc.NewResponse()
+	r.RedirectURL = req.Request().RequestURI
+	r.Respond(301)
+	return r.Respond(301)
 }
 
-func loginRedirect(w http.ResponseWriter, req uc.RequestGetter, s *Server, values map[string]string, redirTo string) SystemReturn {
+func (s *Server) loginRedirect(req uc.RequestGetter, values map[string]string, redirTo string) *uc.Response {
 	key := ""
 	// try to get existing token
 	key, err := s.tokenStorer.GetTokenByOrigin(constant.HAuthorization, req.Host(), values["origin"])
@@ -172,43 +152,46 @@ func loginRedirect(w http.ResponseWriter, req uc.RequestGetter, s *Server, value
 		key, err = s.tokenStorer.NewPersistedToken(constant.HAuthorization, req.Host(), values)
 		if err != nil {
 			s.logger.Debug("Could not generate authorization token for " + values["webid"] + ", err: " + err.Error())
-			return SystemReturn{Status: 500, Body: "Could not generate auth token for " + values["webid"] + ", err: " + err.Error()}
+			return uc.NewResponse().Respond(500, "Could not generate auth token for "+values["webid"]+", err: "+err.Error())
 		}
 	}
 	s.logger.Debug("Generated new token for", values["webid"], "->", key)
 	redir, err := url.Parse(redirTo)
 	if err != nil {
-		return SystemReturn{Status: 400, Body: "Could not parse URL " + redirTo + ". Error: " + err.Error()}
+		return uc.NewResponse().Respond(400, "Could not parse URL "+redirTo+". Error: "+err.Error())
 	}
+
 	q := redir.Query()
 	q.Set("webid", values["webid"])
 	q.Set("key", key)
 	redir.RawQuery = q.Encode()
 	s.logger.Debug("Redirecting user to", redir.String())
-	http.Redirect(w, req.Request(), redir.String(), 301)
-	return SystemReturn{Status: 200}
+
+	r := uc.NewResponse()
+	r.RedirectURL = redir.String()
+	return r.Respond(301)
 }
 
-func accountRecovery(w http.ResponseWriter, req uc.SafeRequestGetter, s *Server) SystemReturn {
+func (s *Server) accountRecovery(req uc.SafeRequestGetter) *uc.Response {
 	if len(req.FormValue("webid")) > 0 && strings.HasPrefix(req.FormValue("webid"), "http") {
-		return sendRecoveryToken(req, s)
+		return s.sendRecoveryToken(req)
 	} else if len(req.FormValue("token")) > 0 {
 		// validate or issue new password
-		return validateRecoveryToken(w, req, s)
+		return s.validateRecoveryToken(req)
 	}
 
 	// return default app with form
-	return SystemReturn{Status: 200, Body: s.templater.AccountRecoveryPage()}
+	return uc.NewResponse().Respond(200, s.templater.AccountRecoveryPage()) //SystemReturn{Status: 200, Body: s.templater.AccountRecoveryPage()}
 }
 
-func sendRecoveryToken(req uc.SafeRequestGetter, s *Server) SystemReturn {
+func (s *Server) sendRecoveryToken(req uc.SafeRequestGetter) *uc.Response {
 	webid := req.FormValue("webid")
 	// exit if not a local WebID
 	// log.Println("Host:" + req.Header.Get("Host"))
 	resource, err := s.pathInformer.GetPathInfo(req.BaseURI())
 	if err != nil {
 		s.logger.Debug("PathInfo error: " + err.Error())
-		return SystemReturn{Status: 500, Body: err.Error()}
+		return uc.NewResponse().Respond(500, err.Error()) //SystemReturn{Status: 500, Body: err.Error()}
 	}
 	// try to fetch recovery email from root ,acl
 	resource, _ = s.pathInformer.GetPathInfo(resource.Base)
@@ -228,7 +211,7 @@ func sendRecoveryToken(req uc.SafeRequestGetter, s *Server) SystemReturn {
 	// exit if no email
 	if len(email) == 0 {
 		s.logger.Debug("Access denied! Could not find a recovery email for WebID: " + webid)
-		return SystemReturn{Status: 403, Body: "Access denied! Could not find a recovery email for WebID: " + webid}
+		return uc.NewResponse().Respond(403, "Access denied! Could not find a recovery email for WebID: "+webid) //SystemReturn{Status: 403, Body: "Access denied! Could not find a recovery email for WebID: " + webid}
 	}
 	values := map[string]string{
 		"webid": webid,
@@ -238,7 +221,7 @@ func sendRecoveryToken(req uc.SafeRequestGetter, s *Server) SystemReturn {
 	token, err := s.NewSecureToken("Recovery", values, t)
 	if err != nil {
 		s.logger.Debug("Could not generate recovery token for " + webid + ", err: " + err.Error())
-		return SystemReturn{Status: 400, Body: "Could not generate recovery token for " + webid + ", err: " + err.Error()}
+		return uc.NewResponse().Respond(400, "Could not generate recovery token for "+webid+", err: "+err.Error()) //SystemReturn{Status: 400, Body: "Could not generate recovery token for " + webid + ", err: " + err.Error()}
 	}
 	// create recovery URL
 	//IP, _, _ := net.SplitHostPort(req.Request.RemoteAddr)
@@ -251,43 +234,41 @@ func sendRecoveryToken(req uc.SafeRequestGetter, s *Server) SystemReturn {
 	//params["{{.From}}"] = s.Config.SMTPConfig.Addr // fixme (should be property of the struct since it's not likely to change)
 	params["{{.Link}}"] = link
 	go s.mailer.SendRecoveryMail(params)
-	return SystemReturn{Status: 200, Body: "You should receive an email shortly with further instructions."}
+	return uc.NewResponse().Respond(200, "You should receive an email shortly with further instructions.") //SystemReturn{Status: 200, Body: "You should receive an email shortly with further instructions."}
 }
 
-func validateRecoveryToken(w http.ResponseWriter, req uc.SafeRequestGetter, s *Server) SystemReturn {
+func (s *Server) validateRecoveryToken(req uc.SafeRequestGetter) *uc.Response {
 	token, err := decodeQuery(req.FormValue("token"))
 	if err != nil {
 		s.logger.Debug("Decode query err: " + err.Error())
-		return SystemReturn{Status: 500, Body: err.Error()}
+		return uc.NewResponse().Respond(500, err.Error()) //SystemReturn{Status: 500, Body: err.Error()}
 	}
+
 	value := make(map[string]string)
 	err = s.cookieManager.Decode("Recovery", token, &value)
 	if err != nil {
 		s.logger.Debug("Decoding err: " + err.Error())
-		return SystemReturn{Status: 500, Body: err.Error()}
+		return uc.NewResponse().Respond(500, err.Error()) //SystemReturn{Status: 500, Body: err.Error()}
 	}
 
 	if len(value["valid"]) == 0 {
-		return SystemReturn{Status: 499, Body: "Missing validity date for token."}
+		return uc.NewResponse().Respond(499, "Missing validity date for token.") // SystemReturn{Status: 499, Body: "Missing validity date for token."}
 	}
 	err = IsTokenDateValid(value["valid"])
 	if err != nil {
-		return SystemReturn{Status: 500, Body: err.Error()}
+		return uc.NewResponse().Respond(500, err.Error()) //SystemReturn{Status: 500, Body: err.Error()}
 	}
 	// also set cookie now
 	webid := value["webid"]
-	err = s.userCookieSet(w, webid)
-	if err != nil {
-		s.logger.Debug("Error setting new cookie: " + err.Error())
-		return SystemReturn{Status: 500, Body: err.Error()}
-	}
 
 	pass := req.FormValue("password")
 	verif := req.FormValue("verifypass")
 	if len(pass) > 0 && len(verif) > 0 {
 		if pass != verif {
 			// passwords don't match,
-			return SystemReturn{Status: 200, Body: s.templater.NewPassTemplate(token, "Passwords do not match!")}
+			r := uc.NewResponse()
+			r.SessionCookie = webid
+			return r.Respond(200, s.templater.NewPassTemplate(token, "Passwords do not match!"))
 		}
 		// save new password
 		resource, _ := s.pathInformer.GetPathInfo(req.BaseURI())
@@ -312,23 +293,28 @@ func validateRecoveryToken(w http.ResponseWriter, req uc.SafeRequestGetter, s *S
 			// write account acl to disk
 			serializedAccountACLGraph, err := s.parser.Serialize(g, constant.TextTurtle)
 			if err != nil {
-				return SystemReturn{Status: 500, Body: err.Error()}
+				return uc.NewResponse().Respond(500, err.Error())
 			}
 			if err := s.fileHandler.CreateOrUpdateFile(resource.AclFile, strings.NewReader(serializedAccountACLGraph)); err != nil {
 				s.logger.Debug("Could not save account acl file with new password. Error: " + err.Error())
-				return SystemReturn{Status: 500, Body: err.Error()}
+				return uc.NewResponse().Respond(500, err.Error())
 			}
 			// All set
-			return SystemReturn{Status: 200, Body: "Password saved!"}
+			r := uc.NewResponse()
+			r.SessionCookie = webid
+			return r.Respond(200, "Password saved!")
 		}
 	}
 
-	return SystemReturn{Status: 200, Body: s.templater.NewPassTemplate(token, "")}
+	r := uc.NewResponse()
+	r.SessionCookie = webid
+	return r.Respond(200, s.templater.NewPassTemplate(token, ""))
 }
 
-func newAccount(w http.ResponseWriter, req uc.SafeRequestGetter, s *Server) SystemReturn {
+// ok to abstract
+func (s *Server) NewAccount(req uc.SafeRequestGetter) *uc.Response {
 	resource, _ := s.pathInformer.GetPathInfo(req.BaseURI())
-	host, port, _ := net.SplitHostPort(req.Host())
+	host, port, _ := s.uriManipulator.SplitHostPort(req.Host()) //todo : give it to URI manipulator interface
 	if len(host) == 0 {
 		host = req.Host()
 	}
@@ -377,7 +363,7 @@ func newAccount(w http.ResponseWriter, req uc.SafeRequestGetter, s *Server) Syst
 	}
 	if stat != nil && stat.IsDir() {
 		s.logger.Debug("Found " + resource.File)
-		return SystemReturn{Status: 406, Body: "An account with the same name already exists."}
+		return uc.NewResponse().Respond(406, "An account with the same name already exists.") //SystemReturn{Status: 406, Body: "An account with the same name already exists."}
 	}
 
 	resource, _ = s.pathInformer.GetPathInfo(webidURL)
@@ -398,90 +384,81 @@ func newAccount(w http.ResponseWriter, req uc.SafeRequestGetter, s *Server) Syst
 	// write WebID profile to disk
 	serializedAccountGraph, err := s.parser.Serialize(g, constant.TextTurtle)
 	if err != nil {
-		return SystemReturn{Status: 500, Body: err.Error()}
+		return uc.NewResponse().Respond(500, err.Error()) //SystemReturn{Status: 500, Body: err.Error()}
 	}
 	if err := s.fileHandler.CreateOrUpdateFile(resource.File, strings.NewReader(serializedAccountGraph)); err != nil {
 		s.logger.Debug("Saving profile error: " + err.Error())
-		return SystemReturn{Status: 500, Body: err.Error()}
+		return uc.NewResponse().Respond(500, err.Error()) //SystemReturn{Status: 500, Body: err.Error()}
 	}
 
 	// Write ACL for the profile
 	aclTerm := domain.NewResource(resource.AclURI + "#owner")
-	g = domain.NewGraph(resource.AclURI)
-	g.AddTriple(aclTerm, domain.NewNS("type").Get("type"), domain.NewNS("acl").Get(constant.HAuthorization))
-	g.AddTriple(aclTerm, domain.NewNS("acl").Get("accessTo"), domain.NewResource(webidURL))
-	g.AddTriple(aclTerm, domain.NewNS("acl").Get("accessTo"), domain.NewResource(resource.AclURI))
-	g.AddTriple(aclTerm, domain.NewNS("acl").Get("agent"), domain.NewResource(webidURI))
-	g.AddTriple(aclTerm, domain.NewNS("acl").Get("mode"), domain.NewNS("acl").Get("Read"))
-	g.AddTriple(aclTerm, domain.NewNS("acl").Get("mode"), domain.NewNS("acl").Get("Write"))
-	g.AddTriple(aclTerm, domain.NewNS("acl").Get("mode"), domain.NewNS("acl").Get("Control"))
+	g = domain.NewGraph(resource.AclURI).
+		AddTriple(aclTerm, domain.NewNS("type").Get("type"), domain.NewNS("acl").Get(constant.HAuthorization)).
+		AddTriple(aclTerm, domain.NewNS("acl").Get("accessTo"), domain.NewResource(webidURL)).
+		AddTriple(aclTerm, domain.NewNS("acl").Get("accessTo"), domain.NewResource(resource.AclURI)).
+		AddTriple(aclTerm, domain.NewNS("acl").Get("agent"), domain.NewResource(webidURI)).
+		AddTriple(aclTerm, domain.NewNS("acl").Get("mode"), domain.NewNS("acl").Get("Read")).
+		AddTriple(aclTerm, domain.NewNS("acl").Get("mode"), domain.NewNS("acl").Get("Write")).
+		AddTriple(aclTerm, domain.NewNS("acl").Get("mode"), domain.NewNS("acl").Get("Control"))
 	readAllTerm := domain.NewResource(resource.AclURI + "#readall")
-	g.AddTriple(readAllTerm, domain.NewNS("rdf").Get("type"), domain.NewNS("acl").Get(constant.HAuthorization))
-	g.AddTriple(readAllTerm, domain.NewNS("acl").Get("accessTo"), domain.NewResource(webidURL))
-	g.AddTriple(readAllTerm, domain.NewNS("acl").Get("agentClass"), domain.NewNS("foaf").Get("Agent"))
-	g.AddTriple(readAllTerm, domain.NewNS("acl").Get("mode"), domain.NewNS("acl").Get("Read"))
+	g.AddTriple(readAllTerm, domain.NewNS("rdf").Get("type"), domain.NewNS("acl").Get(constant.HAuthorization)).
+		AddTriple(readAllTerm, domain.NewNS("acl").Get("accessTo"), domain.NewResource(webidURL)).
+		AddTriple(readAllTerm, domain.NewNS("acl").Get("agentClass"), domain.NewNS("foaf").Get("Agent")).
+		AddTriple(readAllTerm, domain.NewNS("acl").Get("mode"), domain.NewNS("acl").Get("Read"))
 
 	// write profile acl to disk
 	serializedACLGraph, err := s.parser.Serialize(g, constant.TextTurtle)
 	if err != nil {
-		return SystemReturn{Status: 500, Body: err.Error()}
+		return uc.NewResponse().Respond(500, err.Error()) //SystemReturn{Status: 500, Body: err.Error()}
 	}
 	if err := s.fileHandler.CreateOrUpdateFile(resource.AclFile, strings.NewReader(serializedACLGraph)); err != nil {
 		s.logger.Debug("Saving profile acl error: " + err.Error())
-		return SystemReturn{Status: 500, Body: err.Error()}
+		return uc.NewResponse().Respond(500, err.Error()) //SystemReturn{Status: 500, Body: err.Error()}
 	}
 
 	// Link from root meta file to the WebID
-	err = s.LinkToWebID(account)
-	if err != nil {
+	if err := s.LinkToWebID(account); err != nil {
 		s.logger.Debug("Error setting up workspaces: " + err.Error())
-		return SystemReturn{Status: 500, Body: err.Error()}
+		return uc.NewResponse().Respond(500, err.Error()) //SystemReturn{Status: 500, Body: err.Error()}
 	}
 
 	// Create workspaces and preferencesFile
-	err = s.AddWorkspaces(account, len(req.FormValue("email")) > 0, g)
-	if err != nil {
+	if err := s.AddWorkspaces(account, len(req.FormValue("email")) > 0, g); err != nil {
 		s.logger.Debug("Error setting up workspaces: " + err.Error())
-		return SystemReturn{Status: 500, Body: err.Error()}
+		return uc.NewResponse().Respond(500, err.Error()) //SystemReturn{Status: 500, Body: err.Error()}
 	}
 
 	// Write default ACL for the whole account space
 	// No one but the user is allowed access by default
 	resource, _ = s.pathInformer.GetPathInfo(accountBase)
 	aclTerm = domain.NewResource(resource.AclURI + "#owner")
-	g = domain.NewGraph(resource.AclURI)
-	g.AddTriple(aclTerm, domain.NewNS("rdf").Get("type"), domain.NewNS("acl").Get(constant.HAuthorization))
-	g.AddTriple(aclTerm, domain.NewNS("acl").Get("accessTo"), domain.NewResource(resource.URI))
-	g.AddTriple(aclTerm, domain.NewNS("acl").Get("accessTo"), domain.NewResource(resource.AclURI))
-	g.AddTriple(aclTerm, domain.NewNS("acl").Get("agent"), domain.NewResource(webidURI))
+	g = domain.NewGraph(resource.AclURI).
+		AddTriple(aclTerm, domain.NewNS("rdf").Get("type"), domain.NewNS("acl").Get(constant.HAuthorization)).
+		AddTriple(aclTerm, domain.NewNS("acl").Get("accessTo"), domain.NewResource(resource.URI)).
+		AddTriple(aclTerm, domain.NewNS("acl").Get("accessTo"), domain.NewResource(resource.AclURI)).
+		AddTriple(aclTerm, domain.NewNS("acl").Get("agent"), domain.NewResource(webidURI))
 	if len(req.FormValue("password")) > 0 {
 		g.AddTriple(aclTerm, domain.NewNS("acl").Get("password"), domain.NewLiteral(saltedPassword(s.Config.Salt, req.FormValue("password"))))
 	}
 	if len(req.FormValue("email")) > 0 {
 		g.AddTriple(aclTerm, domain.NewNS("acl").Get("agent"), domain.NewResource("mailto:"+req.FormValue("email")))
 	}
-	g.AddTriple(aclTerm, domain.NewNS("acl").Get("defaultForNew"), domain.NewResource(resource.URI))
-	g.AddTriple(aclTerm, domain.NewNS("acl").Get("mode"), domain.NewNS("acl").Get("Read"))
-	g.AddTriple(aclTerm, domain.NewNS("acl").Get("mode"), domain.NewNS("acl").Get("Write"))
-	g.AddTriple(aclTerm, domain.NewNS("acl").Get("mode"), domain.NewNS("acl").Get("Control"))
+	g.AddTriple(aclTerm, domain.NewNS("acl").Get("defaultForNew"), domain.NewResource(resource.URI)).
+		AddTriple(aclTerm, domain.NewNS("acl").Get("mode"), domain.NewNS("acl").Get("Read")).
+		AddTriple(aclTerm, domain.NewNS("acl").Get("mode"), domain.NewNS("acl").Get("Write")).
+		AddTriple(aclTerm, domain.NewNS("acl").Get("mode"), domain.NewNS("acl").Get("Control"))
 
 	// write account acl to disk
 	serializedDefaultACLGraph, err := s.parser.Serialize(g, constant.TextTurtle)
 	if err != nil {
-		return SystemReturn{Status: 500, Body: err.Error()}
-	}
-	if err := s.fileHandler.CreateOrUpdateFile(resource.AclFile, strings.NewReader(serializedDefaultACLGraph)); err != nil {
-		s.logger.Debug("Saving account acl error: " + err.Error())
-		return SystemReturn{Status: 500, Body: err.Error()}
+		return uc.NewResponse().Respond(500, err.Error()) //SystemReturn{Status: 500, Body: err.Error()}
 	}
 
-	// Authenticate the user (set cookie)
-	err = s.userCookieSet(w, webidURI)
-	if err != nil {
-		s.logger.Debug("Error setting new cookie: " + err.Error())
-		return SystemReturn{Status: 500, Body: err.Error()}
+	if err := s.fileHandler.CreateOrUpdateFile(resource.AclFile, strings.NewReader(serializedDefaultACLGraph)); err != nil {
+		s.logger.Debug("Saving account acl error: " + err.Error())
+		return uc.NewResponse().Respond(500, err.Error())
 	}
-	w.Header().Set("User", webidURI)
 
 	// Send welcome email
 	if len(req.FormValue("email")) > 0 {
@@ -499,42 +476,52 @@ func newAccount(w http.ResponseWriter, req uc.SafeRequestGetter, s *Server) Syst
 	// Generate cert
 	// TODO to be deprecated soon
 	spkac := req.FormValue("spkac")
-
-	if len(spkac) > 0 {
-		// create a new x509 cert based on the SPKAC public key
-		certName := account.Name + " [on " + resource.Obj.Host + "]"
-		newSpkac, err := NewSPKACx509(webidURI, certName, spkac)
-		if err != nil {
-			s.logger.Debug("NewSPKACx509 error: " + err.Error())
-			return SystemReturn{Status: 500, Body: err.Error()}
-		}
-
-		pubKey, err := ParseSPKAC(spkac)
-		if err != nil {
-			s.logger.Debug("ParseSPKAC error: " + err.Error())
-		}
-		rsaPub := pubKey.(*rsa.PublicKey)
-		mod := fmt.Sprintf("%x", rsaPub.N)
-		exp := fmt.Sprintf("%d", rsaPub.E)
-		err = s.AddCertKeys(webidURI, mod, exp)
-		if err != nil {
-			s.logger.Debug("Couldn't add cert keys to profile: " + err.Error())
-		}
-
-		ua := req.Header("User-Agent")
-		if strings.Contains(ua, "Chrome") {
-			w.Header().Set(constant.HCType, "application/x-x509-user-cert; charset=utf-8")
-			return SystemReturn{Status: 200, Bytes: newSpkac}
-		}
-		// Prefer loading cert in iframe, to access onLoad events in the browser for the iframe
-		body := `<iframe width="0" height="0" style="display: none;" src="data:application/x-x509-user-cert;base64,` + base64.StdEncoding.EncodeToString(newSpkac) + `"></iframe>`
-
-		return SystemReturn{Status: 200, Body: body}
+	if spkac == "" {
+		r := uc.NewResponse()
+		r.SessionCookie = webidURI
+		r.HeaderSet("User", webidURI)
+		return r.Respond(200)
 	}
-	return SystemReturn{Status: 200, Body: ""}
+
+	// create a new x509 cert based on the SPKAC public key
+	certName := account.Name + " [on " + resource.Obj.Host + "]"
+	newSpkac, err := NewSPKACx509(webidURI, certName, spkac)
+	if err != nil {
+		s.logger.Debug("NewSPKACx509 error: " + err.Error())
+		return uc.NewResponse().Respond(500, err.Error())
+	}
+
+	pubKey, err := ParseSPKAC(spkac)
+	if err != nil {
+		s.logger.Debug("ParseSPKAC error: " + err.Error())
+		return uc.NewResponse().Respond(500, err.Error())
+	}
+
+	rsaPub := pubKey.(*rsa.PublicKey)
+	mod := fmt.Sprintf("%x", rsaPub.N)
+	exp := fmt.Sprintf("%d", rsaPub.E)
+	err = s.AddCertKeys(webidURI, mod, exp)
+	if err != nil {
+		s.logger.Debug("Couldn't add cert keys to profile: " + err.Error())
+		return uc.NewResponse().Respond(500, err.Error())
+	}
+
+	if strings.Contains(req.Header("User-Agent"), "Chrome") {
+		r := uc.NewResponse()
+		r.SessionCookie = webidURI
+		r.HeaderSet("User", webidURI)
+		r.HeaderSet(constant.HCType, "application/x-x509-user-cert; charset=utf-8")
+		r.Bytes = newSpkac
+		return r.Respond(200)
+	}
+
+	r := uc.NewResponse()
+	r.SessionCookie = webidURI
+	r.HeaderSet("User", webidURI)
+	return r.Respond(200, `<iframe width="0" height="0" style="display: none;" src="data:application/x-x509-user-cert;base64,`+base64.StdEncoding.EncodeToString(newSpkac)+`"></iframe>`) //SystemReturn{Status: 200, Body: body}
 }
 
-func newCert(w http.ResponseWriter, req uc.SafeRequestGetter, s *Server) SystemReturn {
+func (s *Server) NewCert(req uc.SafeRequestGetter, loggedUser string) *uc.Response {
 	resource, _ := s.pathInformer.GetPathInfo(req.BaseURI())
 
 	name := req.FormValue("name")
@@ -547,24 +534,24 @@ func newCert(w http.ResponseWriter, req uc.SafeRequestGetter, s *Server) SystemR
 		newSpkac, err := NewSPKACx509(webidURI, certName, spkac)
 		if err != nil {
 			s.logger.Debug("NewSPKACx509 error: " + err.Error())
-			return SystemReturn{Status: 500, Body: err.Error()}
+			return uc.NewResponse().Respond(500, err.Error()) //SystemReturn{Status: 500, Body: err.Error()}
 		}
 		s.logger.Debug("Generated new cert for " + webidURI)
 
 		// Append cert to profile if it's the case
-		loggedUser := w.Header().Get("User")
+		//loggedUser := w.Header().Get("User")
 		s.logger.Debug("Checking if request is authenticated: " + loggedUser)
 		if len(loggedUser) > 0 && loggedUser == webidURI && strings.HasPrefix(webidURI, resource.Base) {
 			acl := uc.NewWAC(loggedUser, "")
 			aclStatus, err := s.i.AllowWrite(acl, req.Header("Origin"), strings.Split(webidURI, "#")[0])
 			if aclStatus > 200 || err != nil {
-				return SystemReturn{Status: aclStatus, Body: err.Error()}
+				return uc.NewResponse().Respond(aclStatus, err.Error()) //SystemReturn{Status: aclStatus, Body: err.Error()}
 			}
 
 			pubKey, err := ParseSPKAC(spkac)
 			if err != nil {
 				s.logger.Debug("ParseSPKAC error: " + err.Error())
-				return SystemReturn{Status: 500, Body: err.Error()}
+				return uc.NewResponse().Respond(500, err.Error()) //SystemReturn{Status: 500, Body: err.Error()}
 			}
 			rsaPub := pubKey.(*rsa.PublicKey)
 			mod := fmt.Sprintf("%x", rsaPub.N)
@@ -572,7 +559,7 @@ func newCert(w http.ResponseWriter, req uc.SafeRequestGetter, s *Server) SystemR
 			err = s.AddCertKeys(webidURI, mod, exp)
 			if err != nil {
 				s.logger.Debug("Couldn't add cert keys to profile: " + err.Error())
-				return SystemReturn{Status: 500, Body: err.Error()}
+				return uc.NewResponse().Respond(500, err.Error()) //SystemReturn{Status: 500, Body: err.Error()}
 			}
 			s.logger.Debug("Also added cert public key to " + webidURI)
 		} else {
@@ -583,23 +570,25 @@ func newCert(w http.ResponseWriter, req uc.SafeRequestGetter, s *Server) SystemR
 
 		ua := req.Header("User-Agent")
 		if strings.Contains(ua, "Chrome") {
-			w.Header().Set(constant.HCType, "application/x-x509-user-cert; charset=utf-8")
-			return SystemReturn{Status: 200, Bytes: newSpkac}
+			r := uc.NewResponse()
+			r.HeaderSet(constant.HCType, "application/x-x509-user-cert; charset=utf-8")
+			r.Bytes = newSpkac
+			return r.Respond(200)
 		}
 		// Prefer loading cert in iframe, to access onLoad events in the browser for the iframe
 		body := `<iframe width="0" height="0" style="display: none;" src="data:application/x-x509-user-cert;base64,` + base64.StdEncoding.EncodeToString(newSpkac) + `"></iframe>`
 
-		return SystemReturn{Status: 200, Body: body}
+		return uc.NewResponse().Respond(500, body) //  SystemReturn{Status: 200, Body: body}
 	} else if strings.Contains(req.Header("Accept"), constant.TextHtml) {
-		return SystemReturn{Status: 200, Body: s.templater.NewCert()}
+		return uc.NewResponse().Respond(200, s.templater.NewCert()) //SystemReturn{Status: 200, Body: s.templater.NewCert()}
 	}
-	return SystemReturn{Status: 500, Body: "Your request could not be processed. Either no WebID or no SPKAC value was provided."}
+	return uc.NewResponse().Respond(500, "Your request could not be processed. Either no WebID or no SPKAC value was provided.") // SystemReturn{Status: 500, Body: "Your request could not be processed. Either no WebID or no SPKAC value was provided."}
 }
 
-// accountStatus implements a basic API to check whether a user account exists on the server
+// AccountStatus implements a basic API to check whether a user account exists on the server
 // Response object example:
 // {
-//	method:   "accountStatus",
+//	method:   "AccountStatus",
 //  status:   "success",
 //  formURL:  "https://example.org/,system/spkac",
 //  loginURL: "https://example.org/,system/login/",
@@ -609,9 +598,9 @@ func newCert(w http.ResponseWriter, req uc.SafeRequestGetter, s *Server) SystemR
 //            }
 // }
 // @@TODO treat exceptions
-func accountStatus(w http.ResponseWriter, req uc.SafeRequestGetter, s *Server) SystemReturn {
+func (s *Server) AccountStatus(req uc.SafeRequestGetter) *uc.Response {
 	resource, _ := s.pathInformer.GetPathInfo(req.BaseURI())
-	host, port, _ := net.SplitHostPort(req.Host())
+	host, port, _ := s.uriManipulator.SplitHostPort(req.Host())
 	if len(host) == 0 {
 		host = req.Host()
 	}
@@ -622,21 +611,21 @@ func accountStatus(w http.ResponseWriter, req uc.SafeRequestGetter, s *Server) S
 	data, err := ioutil.ReadAll(req.Body())
 	if err != nil {
 		s.logger.Debug("Read body error: " + err.Error())
-		return SystemReturn{Status: 500, Body: err.Error()}
+		return uc.NewResponse().Respond(500, err.Error())
 	}
 	if len(data) == 0 {
-		s.logger.Debug("Empty request for accountStatus API")
-		return SystemReturn{Status: 500, Body: "Empty request for accountStatus API"}
+		s.logger.Debug("Empty request for AccountStatus API")
+		return uc.NewResponse().Respond(500, "Empty request for AccountStatus API")
 	}
+
 	var accReq accountRequest
-	err = json.Unmarshal(data, &accReq)
-	if err != nil {
+	if err := json.Unmarshal(data, &accReq); err != nil {
 		s.logger.Debug("Unmarshal error: " + err.Error())
-		return SystemReturn{Status: 500, Body: err.Error()}
+		return uc.NewResponse().Respond(500, err.Error())
 	}
+
 	accReq.AccountName = strings.ToLower(accReq.AccountName)
 
-	w.Header().Set(constant.HCType, constant.ApplicationJSON)
 	status := "success"
 	accName := accReq.AccountName
 	accURL := resource.Base + "/" + accName + "/"
@@ -647,6 +636,7 @@ func accountStatus(w http.ResponseWriter, req uc.SafeRequestGetter, s *Server) S
 	resource, _ = s.pathInformer.GetPathInfo(accURL)
 
 	s.logger.Debug("Checking if account <" + accReq.AccountName + "> exists...")
+
 	stat, err := os.Stat(resource.File)
 	if err != nil {
 		s.logger.Debug("Stat error: " + err.Error())
@@ -667,19 +657,22 @@ func accountStatus(w http.ResponseWriter, req uc.SafeRequestGetter, s *Server) S
 			Available:  isAvailable,
 		},
 	}
+
 	jsonData, err := json.Marshal(res)
 	if err != nil {
 		s.logger.Debug("Marshal error: " + err.Error())
 	}
-	return SystemReturn{Status: 200, Body: string(jsonData)}
+	r := uc.NewResponse()
+	r.HeaderSet(constant.HCType, constant.ApplicationJSON)
+	return r.Respond(200, jsonData) //SystemReturn{Status: 200, Body: string(jsonData)}
 }
 
-func accountTokens(req uc.SafeRequestGetter, s *Server, user string, isOwner bool) SystemReturn {
+func (s *Server) accountTokens(req uc.SafeRequestGetter, user string, isOwner bool) *uc.Response {
 	if len(user) == 0 {
-		return SystemReturn{Status: 401, Body: s.templater.Unauthorized(req.FormValue("redirect"), "")}
+		return uc.NewResponse().Respond(401, s.templater.Unauthorized(req.FormValue("redirect"), "")) //SystemReturn{Status: 401, Body: s.templater.Unauthorized(req.FormValue("redirect"), "")}
 	}
 	if !isOwner {
-		return SystemReturn{Status: 403, Body: "You are not allowed to view this page"}
+		return uc.NewResponse().Respond(403, "You are not allowed to view this page") //SystemReturn{Status: 403, Body: "You are not allowed to view this page"}
 	}
 
 	tokensHTML := "<div>"
@@ -710,5 +703,5 @@ func accountTokens(req uc.SafeRequestGetter, s *Server, user string, isOwner boo
 
 	tokensHTML += "</div>"
 
-	return SystemReturn{Status: 200, Body: s.templater.TokensTemplate(tokensHTML)}
+	return uc.NewResponse().Respond(200, s.templater.TokensTemplate(tokensHTML)) //SystemReturn{Status: 200, Body: s.templater.TokensTemplate(tokensHTML)}
 }

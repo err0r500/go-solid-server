@@ -160,7 +160,7 @@ package gold_test
 //// 		"webid": {"https://user.example.org/user/card#me"},
 //// 		"name":  {"Test User"},
 //// 	}
-//// 	request, err := http.NewRequest("POST", testServer1.URL+"/"+SystemPrefix+"/newCert", bytes.NewBufferString(form.Encode()))
+//// 	request, err := http.NewRequest("POST", testServer1.URL+"/"+SystemPrefix+"/NewCert", bytes.NewBufferString(form.Encode()))
 //// 	assert.NoError(t, err)
 //// 	request.Header.Add("Content-Type", "application/x-www-form-urlencoded")
 //// 	request.Header.Add("Content-Length", strconv.Itoa(len(form.Encode())))
@@ -176,7 +176,7 @@ package gold_test
 //// 	assert.NoError(t, err)
 //// 	assert.Equal(t, "https://user.example.org/user/card#me", webid)
 //
-//// 	request, err = http.NewRequest("POST", testServer1.URL+"/"+SystemPrefix+"/newCert", bytes.NewBufferString(form.Encode()))
+//// 	request, err = http.NewRequest("POST", testServer1.URL+"/"+SystemPrefix+"/NewCert", bytes.NewBufferString(form.Encode()))
 //// 	assert.NoError(t, err)
 //// 	request.Header.Add("Content-Type", "application/x-www-form-urlencoded")
 //// 	request.Header.Add("Content-Length", strconv.Itoa(len(form.Encode())))
@@ -209,7 +209,7 @@ package gold_test
 //// 		"username": {"user"},
 //// 		"email":    {"test@user.org"},
 //// 	}
-//// 	request, err := http.NewRequest("POST", testServer1.URL+"/"+SystemPrefix+"/newAccount", bytes.NewBufferString(form.Encode()))
+//// 	request, err := http.NewRequest("POST", testServer1.URL+"/"+SystemPrefix+"/NewAccount", bytes.NewBufferString(form.Encode()))
 //// 	assert.NoError(t, err)
 //// 	request.Header.Add("Content-Type", "application/x-www-form-urlencoded")
 //// 	request.Header.Add("Content-Length", strconv.Itoa(len(form.Encode())))
@@ -227,7 +227,7 @@ package gold_test
 //// 	assert.NoError(t, err)
 //// 	assert.Equal(t, "https://user."+strings.TrimLeft(testServer1.URL, "https://")+"/profile/card#me", webid)
 //
-//// 	request, err = http.NewRequest("POST", testServer1.URL+"/"+SystemPrefix+"/newAccount", bytes.NewBufferString(form.Encode()))
+//// 	request, err = http.NewRequest("POST", testServer1.URL+"/"+SystemPrefix+"/NewAccount", bytes.NewBufferString(form.Encode()))
 //// 	assert.NoError(t, err)
 //// 	request.Header.Add("Content-Type", "application/x-www-form-urlencoded")
 //// 	request.Header.Add("Content-Length", strconv.Itoa(len(form.Encode())))
@@ -239,7 +239,7 @@ package gold_test
 //// 	err = os.RemoveAll("_test/user." + strings.TrimLeft(testServer1.URL, "https://"))
 //// 	assert.NoError(t, err)
 //
-//// 	request, err = http.NewRequest("POST", testServer1.URL+"/"+SystemPrefix+"/newAccount", bytes.NewBufferString(form.Encode()))
+//// 	request, err = http.NewRequest("POST", testServer1.URL+"/"+SystemPrefix+"/NewAccount", bytes.NewBufferString(form.Encode()))
 //// 	assert.NoError(t, err)
 //// 	request.Header.Add("Content-Type", "application/x-www-form-urlencoded")
 //// 	request.Header.Add("Content-Length", strconv.Itoa(len(form.Encode())))

@@ -2,6 +2,7 @@ package domain
 
 import (
 	"errors"
+	"net"
 	"net/url"
 	"strings"
 )
@@ -67,6 +68,10 @@ func (URIHandler) ParseBearerAuthorizationHeader(header string) (string, error) 
 // fixme move to its own implementation folder
 func decodeQuery(s string) (string, error) {
 	return url.QueryUnescape(s)
+}
+
+func (URIHandler) SplitHostPort(hostport string) (host, port string, err error) {
+	return net.SplitHostPort(hostport)
 }
 
 // frag = lambda x: x[x.find('#')==-1 and len(x) or x.find('#'):len(x)-(x[-1]=='>')]

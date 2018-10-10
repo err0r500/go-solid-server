@@ -46,7 +46,7 @@ func (s Interactor) GetHead(req RequestGetter, resource *domain.PathInfo, conten
 		r.HeaderSet(constant.HCType, contentType)
 		urlStr := resource.URI
 		s.logger.Debug("Redirecting to", urlStr)
-		r.redirectURL = urlStr
+		r.RedirectURL = urlStr
 		return r.Respond(301)
 	}
 
@@ -56,7 +56,7 @@ func (s Interactor) GetHead(req RequestGetter, resource *domain.PathInfo, conten
 	// redirect to app
 	if s.Config.Vhosts && !resource.Exists && resource.Base == strings.TrimRight(req.BaseURI(), "/") && contentType == constant.TextHtml && req.Method() != "HEAD" {
 		r.HeaderSet(constant.HCType, contentType)
-		r.redirectURL = s.Config.SignUpApp + url.QueryEscape(resource.Obj.Scheme+"://"+resource.Obj.Host+"/"+constant.SystemPrefix+"/accountStatus")
+		r.RedirectURL = s.Config.SignUpApp + url.QueryEscape(resource.Obj.Scheme+"://"+resource.Obj.Host+"/"+constant.SystemPrefix+"/accountStatus")
 		return r.Respond(303)
 	}
 
@@ -106,7 +106,7 @@ func (s Interactor) GetHead(req RequestGetter, resource *domain.PathInfo, conten
 				} else if req.Method() != "HEAD" {
 					//TODO load file manager app from local preference file
 					r.HeaderSet(constant.HCType, contentType)
-					r.redirectURL = s.Config.DirApp + resource.Obj.Scheme + "/" + resource.Obj.Host + "/" + resource.Obj.Path + "?" + req.URLRawQuery()
+					r.RedirectURL = s.Config.DirApp + resource.Obj.Scheme + "/" + resource.Obj.Host + "/" + resource.Obj.Path + "?" + req.URLRawQuery()
 					return r.Respond(303)
 				}
 			}

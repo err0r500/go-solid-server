@@ -1,10 +1,13 @@
 package uc
 
 type Response struct {
-	Status      int
-	headers     map[string][]string
-	Body        []interface{}
-	redirectURL string
+	Status                       int
+	headers                      map[string][]string
+	Body                         []interface{}
+	Bytes                        []byte //should really be handled differently than body ?
+	RedirectURL                  string
+	SessionCookie                string
+	SessionCookieShouldBeDeleted bool
 }
 
 func NewResponse() *Response {
@@ -39,7 +42,7 @@ func (r *Response) Respond(status int, a ...interface{}) *Response {
 func (r *Response) ShouldRedirect() (bool, string) {
 	switch r.Status {
 	case 301, 303:
-		return true, r.redirectURL
+		return true, r.RedirectURL
 	default:
 		return false, ""
 	}

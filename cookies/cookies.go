@@ -2,6 +2,8 @@ package cookies
 
 import (
 	"errors"
+	"net/http"
+	"time"
 
 	"github.com/err0r500/go-solid-server/uc"
 	"github.com/gorilla/securecookie"
@@ -10,12 +12,14 @@ import (
 type secureCookiesHandler struct {
 	cookie *securecookie.SecureCookie
 	salt   []byte
+	age    int64
 }
 
-func New() uc.CookieManager {
+func New(age int64) uc.CookieManager {
 	return secureCookiesHandler{
 		cookie: securecookie.New(securecookie.GenerateRandomKey(32), securecookie.GenerateRandomKey(32)),
 		salt:   securecookie.GenerateRandomKey(8),
+		age:    age,
 	}
 }
 
@@ -34,4 +38,32 @@ func (c secureCookiesHandler) Check(token string) error {
 	}
 
 	return errors.New("wrong secret value in client token")
+}
+
+func (c secureCookiesHandler) SetSessionCookie(w http.ResponseWriter, user string) error {
+	encoded, err := c.Encode("Session", map[string]string{"user": user})
+	if err != nil {
+		return err
+	}
+
+	cookieCfg := &http.Cookie{
+		Expires: time.Now().Add(time.Duration(c.age) * time.Hour),
+		Name:    "Session",
+		Path:    "/",
+		Value:   encoded,
+		Secure:  true,
+	}
+
+	http.SetCookie(w, cookieCfg)
+
+	return nil
+}
+
+func (c secureCookiesHandler) DelSessionCookie(w http.ResponseWriter) {
+	http.SetCookie(w, &http.Cookie{
+		Name:   "Session",
+		Value:  "deleted",
+		Path:   "/",
+		MaxAge: -1,
+	})
 }

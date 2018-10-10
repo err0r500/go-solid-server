@@ -65,18 +65,29 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	r := s.handle(w, reqHandler.NewRequestGetter(req))
 	if r == nil {
 		log.Println("received nil response on ", req.Method)
+		return
 	}
+
 	for key, value := range r.Headers() {
 		for _, v := range value {
 			w.Header().Add(key, v)
 		}
 	}
+	if r.SessionCookie != "" {
+		s.cookieManager.SetSessionCookie(w, r.SessionCookie)
+	}
+	if r.SessionCookieShouldBeDeleted {
+		s.cookieManager.DelSessionCookie(w)
+	}
 	if ok, newURL := r.ShouldRedirect(); ok {
 		http.Redirect(w, req, newURL, r.Status)
 	}
-
 	if r.Status > 0 {
 		w.WriteHeader(r.Status)
+	}
+	if r.Bytes != nil {
+		io.Copy(w, bytes.NewReader(r.Bytes))
+		return //check if body wouldn't be enough
 	}
 	if len(r.Body) > 0 {
 		fmt.Fprint(w, r.Body...)
@@ -128,13 +139,7 @@ func (s *Server) handle(w http.ResponseWriter, req uc.RequestGetter) *uc.Respons
 
 	// Intercept API requests
 	if req.TargetsAPI() {
-		r := uc.NewResponse()
-		resp := HandleSystem(w, req, s, user, isOwner)
-		if resp.Bytes != nil && len(resp.Bytes) > 0 {
-			io.Copy(w, bytes.NewReader(resp.Bytes))
-			return r
-		}
-		return r.Respond(resp.Status, resp.Body)
+		return s.HandleSystem(w, req, user, isOwner)
 	}
 
 	// Proxy requests
@@ -148,7 +153,7 @@ func (s *Server) handle(w http.ResponseWriter, req uc.RequestGetter) *uc.Respons
 
 	// Query requests
 	if req.Method() == "POST" && strings.Contains(req.URLPath(), constant.QueryPath) && len(s.Config.QueryTemplate) > 0 {
-		return TwinqlQuery(w, req, s, user)
+		return s.TwinqlQuery(w, req, user)
 	}
 
 	dataMime := strings.Split(req.Header(constant.HCType), ";")[0]
@@ -204,7 +209,7 @@ func (s *Server) handle(w http.ResponseWriter, req uc.RequestGetter) *uc.Respons
 }
 
 // TwinqlQuery ...
-func TwinqlQuery(w http.ResponseWriter, req uc.SafeRequestGetter, s *Server, user string) *uc.Response {
+func (s *Server) TwinqlQuery(w http.ResponseWriter, req uc.SafeRequestGetter, user string) *uc.Response {
 	r := uc.NewResponse()
 
 	err := s.ProxyReq(w, req, s.Config.QueryTemplate, user)
@@ -261,7 +266,7 @@ func (s *Server) ProxyReq(w http.ResponseWriter, req uc.SafeRequestGetter, reqUR
 		foundUser = user
 	}
 
-	// fixme removed proxying for now, enable it again after refactoring
+	// fixme : removed proxying for now, enable it again after refactoring
 	//req.URL = uri
 	//req.Host = uri.Host
 	//req.RequestURI = uri.RequestURI()

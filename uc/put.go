@@ -10,10 +10,10 @@ func (s Interactor) Put(req RequestGetter, resource *domain.PathInfo, acl WAC) *
 	r.HeaderAdd("Link", s.uriManipulator.Brack("http://www.w3.org/ns/ldp#Resource")+"; rel=\"type\"")
 
 	// check append first
-	aclAppendStatus, err := s.AllowAppend(acl, req.Header("Origin"), resource.URI)
+	aclAppendStatus, err := s.CheckAllow(acl, appendAccess, req.Header("Origin"), resource.URI)
 	if aclAppendStatus > 200 || err != nil {
 		// check if we can write then
-		aclWriteStatus, err := s.AllowWrite(acl, req.Header("Origin"), resource.URI)
+		aclWriteStatus, err := s.CheckAllow(acl, writeAccess, req.Header("Origin"), resource.URI)
 		if aclWriteStatus > 200 || err != nil {
 			return r.Respond(aclWriteStatus, s.handleStatusText(aclWriteStatus, err))
 		}

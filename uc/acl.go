@@ -19,30 +19,15 @@ func NewWAC(user string, key string) WAC {
 }
 
 const (
-	readAccess    = "Read"
-	writeAccess   = "Write"
-	appendAccess  = "Append"
-	controlAccess = "Control"
+	readAccess   = "Read"
+	writeAccess  = "Write"
+	appendAccess = "Append"
+	//controlAccess = "Control"
 )
 
 // AllowRead checks if Read access is allowed
-func (s Interactor) AllowRead(acl WAC, origin, path string) (int, error) {
-	return s.allow(acl, origin, readAccess, path)
-}
-
-// AllowWrite checks if Write access is allowed
-func (s Interactor) AllowWrite(acl WAC, origin, path string) (int, error) {
-	return s.allow(acl, origin, writeAccess, path)
-}
-
-// AllowAppend checks if Append access is allowed
-func (s Interactor) AllowAppend(acl WAC, origin, path string) (int, error) {
-	return s.allow(acl, origin, appendAccess, path)
-}
-
-// AllowControl checks if Control access is allowed
-func (s Interactor) AllowControl(acl WAC, origin, path string) (int, error) {
-	return s.allow(acl, origin, controlAccess, path)
+func (s Interactor) CheckAllow(acl WAC, mode, origin, path string) (int, error) {
+	return s.allow(acl, origin, mode, path)
 }
 
 func (s Interactor) VerifyDelegator(delegator string, delegatee string) bool {

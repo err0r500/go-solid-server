@@ -66,7 +66,7 @@ func (s Interactor) GetHead(req RequestGetter, resource *domain.PathInfo, conten
 	r.HeaderAdd("Link", s.uriManipulator.Brack("http://www.w3.org/ns/ldp#Resource")+"; rel=\"type\"")
 
 	status := 501
-	aclStatus, err := s.AllowRead(acl, req.Header("Origin"), resource.URI)
+	aclStatus, err := s.CheckAllow(acl, readAccess, req.Header("Origin"), resource.URI)
 	if aclStatus > 200 || err != nil {
 		return r.Respond(aclStatus, s.handleStatusText(aclStatus, err))
 	}
@@ -140,7 +140,7 @@ func (s Interactor) GetHead(req RequestGetter, resource *domain.PathInfo, conten
 					for _, file := range matches {
 						res, err := s.pathInformer.GetPathInfo(resource.Base + "/" + filepath.Dir(resource.Path) + "/" + filepath.Base(file))
 						if !res.IsDir && res.Exists && err == nil {
-							aclStatus, err = s.AllowRead(acl, req.Header("Origin"), res.URI)
+							aclStatus, err = s.CheckAllow(acl, readAccess, req.Header("Origin"), res.URI)
 							if aclStatus == 200 && err == nil {
 								s.fileHandler.AppendFile(g, res.File, res.URI)
 								g.AddTriple(root, domain.NewResource("http://www.w3.org/ns/ldp#contains"), domain.NewResource(res.URI))

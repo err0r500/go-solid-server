@@ -503,7 +503,7 @@ func (s Interactor) NewCert(req SafeRequestGetter, loggedUser string) *Response 
 		// Append cert to profile if it's the case
 		s.logger.Debug("Checking if request is authenticated: " + loggedUser)
 		if len(loggedUser) > 0 && loggedUser == webidURI && strings.HasPrefix(webidURI, resource.Base) {
-			if aclStatus, err := s.AllowWrite(NewWAC(loggedUser, ""), req.Header("Origin"), strings.Split(webidURI, "#")[0]); aclStatus > 200 || err != nil {
+			if aclStatus, err := s.CheckAllow(NewWAC(loggedUser, ""), "Write", req.Header("Origin"), strings.Split(webidURI, "#")[0]); aclStatus > 200 || err != nil {
 				return NewResponse().Respond(aclStatus, err.Error()) //SystemReturn{Status: aclStatus, Body: err.Error()}
 			}
 

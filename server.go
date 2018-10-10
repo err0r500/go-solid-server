@@ -133,7 +133,7 @@ func (s *Server) handle(w http.ResponseWriter, req uc.RequestGetter) *uc.Respons
 	isOwner := false
 	resource, _ := s.pathInformer.GetPathInfo(req.BaseURI())
 	if len(user) > 0 {
-		if aclStatus, err := s.i.AllowWrite(acl, req.Header("Origin"), resource.Base); aclStatus == 200 && err == nil {
+		if aclStatus, err := s.i.CheckAllow(acl, "Write", req.Header("Origin"), resource.Base); aclStatus == 200 && err == nil {
 			isOwner = true
 		}
 	}

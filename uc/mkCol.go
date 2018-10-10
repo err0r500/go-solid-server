@@ -7,7 +7,7 @@ import (
 func (s Interactor) MkCol(req SafeRequestGetter, resource *domain.PathInfo, acl WAC) *Response {
 	r := NewResponse()
 
-	aclWrite, err := s.AllowWrite(acl, req.Header("Origin"), resource.URI)
+	aclWrite, err := s.CheckAllow(acl, writeAccess, req.Header("Origin"), resource.URI)
 	if aclWrite > 200 || err != nil {
 		return r.Respond(aclWrite, s.handleStatusText(aclWrite, err))
 	}

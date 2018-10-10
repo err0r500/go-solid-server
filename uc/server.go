@@ -24,10 +24,11 @@ type LogicHandler interface {
 	NewCert(req SafeRequestGetter, loggedUser string) *Response
 	GetAuthzFromToken(token string, user string, req SafeRequestGetter) (string, error)
 
-	AllowRead(acl WAC, origin, path string) (int, error) // fixme unify the interface
-	AllowWrite(acl WAC, origin, path string) (int, error)
-	AllowControl(acl WAC, origin, path string) (int, error)
-	AllowAppend(acl WAC, origin, path string) (int, error)
+	CheckAllow(acl WAC, mode, origin, path string) (int, error)
+	//AllowRead(acl WAC, origin, path string) (int, error) // fixme unify the interface
+	//AllowWrite(acl WAC, origin, path string) (int, error)
+	//AllowControl(acl WAC, origin, path string) (int, error)
+	//AllowAppend(acl WAC, origin, path string) (int, error)
 	VerifyDelegator(delegator string, delegatee string) bool
 	Authenticate(getter RequestGetter) string
 }

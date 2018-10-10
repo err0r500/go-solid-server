@@ -16,10 +16,10 @@ func (s Interactor) Patch(req SafeRequestGetter, resource *domain.PathInfo, data
 	r = &Response{}
 
 	// check append first
-	aclAppend, err := s.AllowAppend(acl, req.Header("Origin"), resource.URI)
+	aclAppend, err := s.CheckAllow(acl, appendAccess, req.Header("Origin"), resource.URI)
 	if aclAppend > 200 || err != nil {
 		// check if we can write then
-		aclWrite, err := s.AllowWrite(acl, req.Header("Origin"), resource.URI)
+		aclWrite, err := s.CheckAllow(acl, writeAccess, req.Header("Origin"), resource.URI)
 		if aclWrite > 200 || err != nil {
 			return r.Respond(aclWrite, s.handleStatusText(aclWrite, err))
 		}

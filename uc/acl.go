@@ -18,6 +18,13 @@ func NewWAC(user string, key string) WAC {
 	return WAC{user: user, key: key}
 }
 
+func (w WAC) ContainsUser() bool {
+	return w.user != ""
+}
+func (w WAC) ContainsKey() bool {
+	return w.key != ""
+}
+
 const (
 	readAccess   = "Read"
 	writeAccess  = "Write"
@@ -46,12 +53,13 @@ func (s Interactor) VerifyDelegator(delegator string, delegatee string) bool {
 }
 
 // Return an HTTP code and error (200 if authd, 401 if auth required, 403 if not authorized, 500 if error)
-func (s Interactor) allow(acl WAC, origin string, mode string, path string) (int, error) {
+func (s Interactor) allow(wac WAC, origin string, mode string, path string) (int, error) {
 	accessType := "accessTo"
 	p, err := s.pathInformer.GetPathInfo(path)
 	if err != nil {
 		return 500, err
 	}
+
 	depth := strings.Split(p.Path, "/")
 
 	for d := len(depth); d >= 0; d-- {
@@ -60,7 +68,7 @@ func (s Interactor) allow(acl WAC, origin string, mode string, path string) (int
 			return 500, err
 		}
 
-		s.logger.Debug("Checking " + accessType + " <" + mode + "> to " + p.URI + " for WebID: " + acl.user)
+		s.logger.Debug("Checking " + accessType + " <" + mode + "> to " + p.URI + " for WebID: " + wac.user)
 		s.logger.Debug("Looking for policies in " + p.AclFile)
 
 		aclGraph := domain.NewGraph(p.AclURI)
@@ -71,27 +79,24 @@ func (s Interactor) allow(acl WAC, origin string, mode string, path string) (int
 			for _, i := range aclGraph.All(nil, domain.NewNS("acl").Get("mode"), domain.NewNS("acl").Get("Control")) {
 				for range aclGraph.All(i.Subject, domain.NewNS("acl").Get(accessType), domain.NewResource(p.URI)) {
 					//					@@TODO add resourceKey to ACL vocab
-					if len(acl.user) > 0 {
-						s.logger.Debug("Looking for policy matching user:", acl.user)
-						for range aclGraph.All(i.Subject, domain.NewNS("acl").Get("owner"), domain.NewResource(acl.user)) {
-							s.logger.Debug(mode + " access allowed (as owner) for: " + acl.user)
+					if wac.ContainsUser() {
+						if aclGraph.Contains(i.Subject, domain.NewNS("acl").Get("owner"), domain.NewResource(wac.user)) {
+							s.logger.Debug(mode + " access allowed (as owner) for: " + wac.user)
 							return 200, nil
 						}
-						for range aclGraph.All(i.Subject, domain.NewNS("acl").Get("agent"), domain.NewResource(acl.user)) {
-							s.logger.Debug(mode + " access allowed (as agent) for: " + acl.user)
+						if aclGraph.Contains(i.Subject, domain.NewNS("acl").Get("agent"), domain.NewResource(wac.user)) {
+							s.logger.Debug(mode + " access allowed (as agent) for: " + wac.user)
 							return 200, nil
 						}
 					}
-					if len(acl.key) > 0 {
-						s.logger.Debug("Looking for policy matching key:", acl.key)
-						for range aclGraph.All(i.Subject, domain.NewNS("acl").Get("resourceKey"), domain.NewLiteral(acl.key)) {
+					if wac.ContainsKey() {
+						if aclGraph.Contains(i.Subject, domain.NewNS("acl").Get("resourceKey"), domain.NewLiteral(wac.key)) {
 							s.logger.Debug(mode + " access allowed based on matching resource key")
 							return 200, nil
 						}
 					}
 					for _, t := range aclGraph.All(i.Subject, domain.NewNS("acl").Get("agentClass"), nil) {
 						// check for foaf groups
-						s.logger.Debug("Found agentClass policy")
 						if t.Object.Equal(domain.NewNS("foaf").Get("Agent")) {
 							s.logger.Debug(mode + " access allowed as FOAF Agent")
 							return 200, nil
@@ -101,8 +106,8 @@ func (s Interactor) allow(acl WAC, origin string, mode string, path string) (int
 						groupGraph := domain.NewGraph(groupURI)
 						s.httpCaller.LoadURI(groupGraph, groupURI)
 						if groupGraph.NotEmpty() && groupGraph.One(t.Object, domain.NewNS("rdf").Get("type"), domain.NewNS("foaf").Get("Group")) != nil {
-							for range groupGraph.All(t.Object, domain.NewNS("foaf").Get("member"), domain.NewResource(acl.user)) {
-								s.logger.Debug(acl.user + " listed as a member of the group " + groupURI)
+							for range groupGraph.All(t.Object, domain.NewNS("foaf").Get("member"), domain.NewResource(wac.user)) {
+								s.logger.Debug(wac.user + " listed as a member of the group " + groupURI)
 								return 200, nil
 							}
 						}
@@ -127,23 +132,21 @@ func (s Interactor) allow(acl WAC, origin string, mode string, path string) (int
 						s.logger.Debug("No origin found, moving on")
 					}
 				allowOrigin:
-					if len(acl.user) > 0 {
-						s.logger.Debug("Looking for policy matching user:", acl.user)
-						for range aclGraph.All(i.Subject, domain.NewNS("acl").Get("owner"), domain.NewResource(acl.user)) {
-							s.logger.Debug(mode + " access allowed (as owner) for: " + acl.user)
+					if wac.ContainsUser() {
+						s.logger.Debug("Looking for policy matching user:", wac.user)
+						if aclGraph.Contains(i.Subject, domain.NewNS("acl").Get("owner"), domain.NewResource(wac.user)) {
+							s.logger.Debug(mode + " access allowed (as owner) for: " + wac.user)
 							return 200, nil
 						}
-						for range aclGraph.All(i.Subject, domain.NewNS("acl").Get("agent"), domain.NewResource(acl.user)) {
-							s.logger.Debug(mode + " access allowed (as agent) for: " + acl.user)
+
+						if aclGraph.Contains(i.Subject, domain.NewNS("acl").Get("agent"), domain.NewResource(wac.user)) {
+							s.logger.Debug(mode + " access allowed (as agent) for: " + wac.user)
 							return 200, nil
 						}
 					}
-					if len(acl.key) > 0 {
-						s.logger.Debug("Looking for policy matching key:", acl.key)
-						for range aclGraph.All(i.Subject, domain.NewNS("acl").Get("resourceKey"), domain.NewLiteral(acl.key)) {
-							s.logger.Debug(mode + " access allowed based on matching resource key")
-							return 200, nil
-						}
+					if wac.ContainsKey() && aclGraph.Contains(i.Subject, domain.NewNS("acl").Get("resourceKey"), domain.NewLiteral(wac.key)) {
+						s.logger.Debug(mode + " access allowed based on matching resource key")
+						return 200, nil
 					}
 					for _, t := range aclGraph.All(i.Subject, domain.NewNS("acl").Get("agentClass"), nil) {
 						// check for foaf groups
@@ -156,15 +159,15 @@ func (s Interactor) allow(acl WAC, origin string, mode string, path string) (int
 						groupGraph := domain.NewGraph(groupURI)
 						s.httpCaller.LoadURI(groupGraph, groupURI)
 						if groupGraph.NotEmpty() && groupGraph.One(t.Object, domain.NewNS("rdf").Get("type"), domain.NewNS("foaf").Get("Group")) != nil {
-							for range groupGraph.All(t.Object, domain.NewNS("foaf").Get("member"), domain.NewResource(acl.user)) {
-								s.logger.Debug(acl.user + " listed as a member of the group " + groupURI)
+							if aclGraph.Contains(t.Object, domain.NewNS("foaf").Get("member"), domain.NewResource(wac.user)) {
+								s.logger.Debug(wac.user + " listed as a member of the group " + groupURI)
 								return 200, nil
 							}
 						}
 					}
 				}
 			}
-			if len(acl.user) == 0 && len(acl.key) == 0 {
+			if len(wac.user) == 0 && len(wac.key) == 0 {
 				// fixme : this code seems problematic so it's just commented out for now
 				//acl.srv.debug.Println("Authentication required")
 				//tokenValues := map[string]string{
@@ -181,8 +184,9 @@ func (s Interactor) allow(acl WAC, origin string, mode string, path string) (int
 				//acl.w.Header().Set("WWW-Authenticate", wwwAuth)
 				return 401, errors.New("Access to " + p.URI + " requires authentication")
 			}
-			s.logger.Debug(mode + " access denied for: " + acl.user)
-			return 403, errors.New("Access denied for: " + acl.user)
+
+			s.logger.Debug(mode + " access denied for: " + wac.user)
+			return 403, errors.New("Access denied for: " + wac.user)
 		}
 
 		accessType = "defaultForNew"

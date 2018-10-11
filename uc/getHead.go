@@ -3,6 +3,7 @@ package uc
 import (
 	"fmt"
 	"io/ioutil"
+	"log"
 	"net/url"
 	"path/filepath"
 	"strings"
@@ -13,7 +14,6 @@ import (
 )
 
 func (s Interactor) GetHead(req RequestGetter, resource *domain.PathInfo, contentType string, acl WAC) *Response {
-	r := NewResponse()
 	magicType := resource.FileType
 	maybeRDF := false
 	globPath := ""
@@ -33,16 +33,17 @@ func (s Interactor) GetHead(req RequestGetter, resource *domain.PathInfo, conten
 		var err error
 		resource, err = s.pathInformer.GetPathInfo(resource.Base + "/" + path)
 		if err != nil {
-			return r.Respond(500, err)
+			return NewResponse().Respond(500, err)
 		}
 	}
 
 	if !resource.Exists {
-		return r.Respond(404, s.templater.NotFound())
+		return NewResponse().Respond(404, s.templater.NotFound())
 	}
 
 	// First redirect to path + trailing slash if it's missing
 	if resource.IsDir && !glob && !strings.HasSuffix(req.BaseURI(), "/") {
+		r := NewResponse()
 		r.HeaderSet(constant.HCType, contentType)
 		urlStr := resource.URI
 		s.logger.Debug("Redirecting to", urlStr)
@@ -50,6 +51,7 @@ func (s Interactor) GetHead(req RequestGetter, resource *domain.PathInfo, conten
 		return r.Respond(301)
 	}
 
+	r := NewResponse()
 	// overwrite ACL Link header
 	r.HeaderSet("Link", s.uriManipulator.Brack(resource.AclURI)+"; rel=\"acl\", "+s.uriManipulator.Brack(resource.MetaURI)+"; rel=\"meta\"")
 
@@ -243,6 +245,7 @@ func (s Interactor) GetHead(req RequestGetter, resource *domain.PathInfo, conten
 			maybeRDF = true
 		}
 	} else {
+		log.Println("salalallala")
 		magicType = resource.FileType
 		maybeRDF = resource.MaybeRDF
 		if len(mime.MimeRdfExt[resource.Extension]) > 0 {

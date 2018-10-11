@@ -10,7 +10,6 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/err0r500/go-solid-server/encoder"
 	"github.com/err0r500/go-solid-server/reqHandler"
 
 	"github.com/err0r500/go-solid-server/constant"
@@ -27,17 +26,8 @@ type Server struct {
 
 	cookieManager  uc.CookieManager
 	logger         uc.Debug
-	fileHandler    uc.FilesHandler
-	httpCaller     uc.HttpCaller
-	mailer         uc.Mailer
 	pathInformer   uc.PathInformer
-	parser         uc.Encoder
-	rdfHandler     encoder.RdfEncoder // fixme : remove this one
-	templater      uc.Templater
-	tokenStorer    uc.TokenStorer
 	uriManipulator uc.URIManipulator
-	uuidGen        uc.UUIDGenerator
-	spkacHandler   uc.SpkacHandler
 }
 
 // ServeHTTP handles the response

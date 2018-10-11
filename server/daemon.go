@@ -101,61 +101,17 @@ func main() {
 	}
 
 	config := gold.NewServerConfig()
-	//confLoaded := false
 	if len(*conf) > 0 {
 		log.Println("attempt to load JSON")
 		config, err = gold.ConfigLoader{}.LoadJSONFile(*conf)
-		if err == nil {
-			//confLoaded = true
-		} else {
-			log.Println(err)
+		if err != nil {
+			log.Fatal(err)
 		}
 	}
-	//if !confLoaded {
-	//	config.ListenHTTP = *httpA
-	//	config.ListenHTTPS = *httpsA
-	//	config.TLSCert = *tlsCert
-	//	config.TLSKey = *tlsKey
-	//	config.WebIDTLS = *enableWebIDTLS
-	//	config.Salt = *salt
-	//	config.CookieAge = *cookieT
-	//	config.TokenAge = *tokenT
-	//	config.Debug = *debug
-	//	config.DataRoot = serverRoot
-	//	config.BoltPath = *bolt
-	//	config.Vhosts = *vhosts
-	//	config.Insecure = *insecure
-	//	config.NoHTTP = *nohttp
-	//	config.HSTS = *hsts
-	//	config.MetaSuffix = *metaSuffix
-	//	config.ACLSuffix = *aclSuffix
-	//	config.Agent = *agent
-	//	config.ProxyTemplate = *proxy
-	//	config.ProxyLocal = *local
-	//	if len(*emailName) > 0 && len(*emailAddr) > 0 && len(*emailUser) > 0 &&
-	//		len(*emailPass) > 0 && len(*emailServ) > 0 && len(*emailPort) > 0 {
-	//		ep, _ := strconv.Atoi(*emailPort)
-	//		config.SMTPConfig = domain.EmailConfig{
-	//			Name:     *emailName,
-	//			Addr:     *emailAddr,
-	//			User:     *emailUser,
-	//			Pass:     *emailPass,
-	//			Host:     *emailServ,
-	//			Port:     ep,
-	//			ForceSSL: *emailForceSSL,
-	//			Insecure: *emailInsecure,
-	//		}
-	//	}
-	//}
+
 	_, httpsPort, _ = net.SplitHostPort(config.ListenHTTPS)
 
 	handler := gold.NewServer(*config)
-	// Start Bolt // fixme : the defer close() is now missing, pass the bolt.DB connection in NewServer() above, should be enough
-	//err = handler.StartBolt()
-	//if err != nil {
-	//	log.Fatalln(err)
-	//}
-	//defer handler.BoltDB.Close()
 
 	if os.Getenv("FCGI_ROLE") != "" {
 		err = fcgi.Serve(nil, handler)

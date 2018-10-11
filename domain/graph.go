@@ -97,3 +97,7 @@ func (g *Graph) All(s Term, p Term, o Term) []*Triple {
 	}
 	return triples
 }
+
+func (g *Graph) Contains(s Term, p Term, o Term) bool {
+	return g.One(s, p, o) != nil
+}
